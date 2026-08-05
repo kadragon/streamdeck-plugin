@@ -80,6 +80,44 @@ export async function writeAgentEvent(
 		await fs.unlink(temporaryPath).catch(() => undefined);
 		throw error;
 	}
+
+	await pruneStaleEvents(directory);
+}
+
+/**
+ * Drops spool files older than EVENT_TTL_MS so the directory stays bounded when nothing reads it.
+ *
+ * The reader only prunes while it polls, and hooks keep writing while no Agent Attention key is
+ * visible. Every writer name starts with the epoch milliseconds it was created at, so staleness is
+ * read from the name instead of a stat call, and orphaned .tmp files from a crashed writer are
+ * covered by the same rule. Failures are swallowed: pruning must never fail a published event.
+ */
+async function pruneStaleEvents(directory: string): Promise<void> {
+	try {
+		const names = await fs.readdir(directory);
+		const cutoff = Date.now() - EVENT_TTL_MS;
+		await Promise.all(
+			names
+				.filter((name) => {
+					const createdAt = parseEventCreationTime(name);
+					return createdAt !== undefined && createdAt < cutoff;
+				})
+				.map(async (name) => fs.unlink(path.join(directory, name)).catch(() => undefined))
+		);
+	} catch {
+		// A spool that cannot be pruned is still a spool that accepted the event.
+	}
+}
+
+/** Reads the epoch milliseconds a writer encoded into a spool file name, or undefined if foreign. */
+function parseEventCreationTime(name: string): number | undefined {
+	const match = /^\.(\d+)-\d+-.+\.(?:json|tmp)$/.exec(name);
+	if (match === null) {
+		return undefined;
+	}
+
+	const createdAt = Number(match[1]);
+	return Number.isFinite(createdAt) ? createdAt : undefined;
 }
 
 export async function ensureAgentEventDirectory(

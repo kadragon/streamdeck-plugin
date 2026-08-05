@@ -115,6 +115,19 @@ requireText(
 	"docs/conventions.md"
 );
 
+// The hook writer cannot import the TypeScript spool, so its TTL is a mirrored literal. Reader and
+// both writers must agree, or events are pruned before or after they stop being applied.
+const ttlPattern = /const EVENT_TTL_MS = ([^;]+);/;
+const spoolTtl = ttlPattern.exec(read("src/agent-attention/spool.ts"))?.[1];
+const hookTtl = ttlPattern.exec(read("scripts/agent-event.mjs"))?.[1];
+if (spoolTtl === undefined || hookTtl === undefined || spoolTtl !== hookTtl) {
+	failures.push({
+		message: "Agent-attention event TTL differs between src/agent-attention/spool.ts and scripts/agent-event.mjs",
+		fix: "Keep both EVENT_TTL_MS declarations textually identical; spool.ts owns the value.",
+		ref: "docs/conventions.md"
+	});
+}
+
 const manifestPath = "com.kadragon.aiusage.sdPlugin/manifest.json";
 const manifest = read(manifestPath);
 try {

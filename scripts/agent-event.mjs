@@ -7,6 +7,9 @@ import { pathToFileURL } from "node:url";
 const MIN_TAB = 1;
 const MAX_TAB = 8;
 
+/** Mirrors EVENT_TTL_MS in src/agent-attention/spool.ts, which owns the value. */
+const EVENT_TTL_MS = 10 * 60 * 1000;
+
 /**
  * Resolves the same local spool directory used by the Stream Deck plugin.
  * Set AGENT_ATTENTION_STATE_DIR when the hook runs in WSL or another environment with a different
@@ -54,6 +57,43 @@ export async function writeAgentEvent(event, stateDirectory = resolveStateDirect
 		await fs.unlink(temporaryPath).catch(() => undefined);
 		throw error;
 	}
+
+	await pruneStaleEvents(directory);
+}
+
+/**
+ * Drops spool files older than EVENT_TTL_MS so the directory stays bounded when the Stream Deck
+ * plugin never runs and nothing consumes it. Every writer name starts with the epoch milliseconds
+ * it was created at, so staleness is read from the name, and orphaned .tmp files from a crashed
+ * writer are covered by the same rule. Failures are swallowed: pruning must never fail a
+ * published event.
+ */
+async function pruneStaleEvents(directory) {
+	try {
+		const names = await fs.readdir(directory);
+		const cutoff = Date.now() - EVENT_TTL_MS;
+		await Promise.all(
+			names
+				.filter((name) => {
+					const createdAt = parseEventCreationTime(name);
+					return createdAt !== undefined && createdAt < cutoff;
+				})
+				.map(async (name) => fs.unlink(path.join(directory, name)).catch(() => undefined))
+		);
+	} catch {
+		// A spool that cannot be pruned is still a spool that accepted the event.
+	}
+}
+
+/** Reads the epoch milliseconds a writer encoded into a spool file name, or undefined if foreign. */
+function parseEventCreationTime(name) {
+	const match = /^\.(\d+)-\d+-.+\.(?:json|tmp)$/.exec(name);
+	if (match === null) {
+		return undefined;
+	}
+
+	const createdAt = Number(match[1]);
+	return Number.isFinite(createdAt) ? createdAt : undefined;
 }
 
 export function classifyHookEvent(source, input) {

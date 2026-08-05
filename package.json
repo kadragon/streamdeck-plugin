@@ -1,6 +1,6 @@
 {
     "name": "streamdeck-plugin",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "private": true,
     "description": "Stream Deck plugin showing weekly rate-limit usage, Warp tab attention, and selected Warp Tab Config launchers.",
     "scripts": {
