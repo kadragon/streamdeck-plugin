@@ -7,7 +7,7 @@ const SIZE = 144;
 const TEXT_MAX_WIDTH = 126;
 
 /**
- * Rough advance width of one character, as a fraction of the font size, for Helvetica/Arial Bold.
+ * Rough advance width of one character, as a fraction of the key font size.
  *
  * Only used to decide when to shrink text, so an approximation is enough — it errs on the wide side.
  */
@@ -18,6 +18,9 @@ const DANGER_COLOR = "#FF5A5F";
 
 /** Colour used for everything that marks a reading as no longer current. */
 const STALE_COLOR = "#E0A33E";
+
+/** Font used by key faces whose text is part of the rendered SVG rather than Stream Deck's title layer. */
+const KEY_FONT_FAMILY = "Jetendard, Segoe UI, Helvetica, Arial, sans-serif";
 
 /**
  * Per-source branding for the key face; the accent colour is what tells the two keys apart at a glance.
@@ -47,6 +50,20 @@ export type KeyFace = {
 	warn?: boolean;
 };
 
+export type AgentKeyFace = {
+	source: UsageSource;
+	tabNumber: number;
+	status?: "started" | "running" | "attention";
+	reason?: string;
+	/** Alternates the attention face so an active key visibly blinks. */
+	blinkOn?: boolean;
+};
+
+export type WarpTabKeyFace = {
+	/** Selected filename stem, or `undefined` while the property inspector has no selection. */
+	label?: string;
+};
+
 /**
  * Builds the key image as an inline SVG data URI.
  */
@@ -72,6 +89,100 @@ ${renderCaption(face.caption ?? "", captionColor)}
 </svg>`;
 
 	return `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
+}
+
+/**
+ * Builds the fixed-slot agent attention face.
+ *
+ * The attention state alternates between a dark and an amber face; the action owns the timer so this
+ * renderer remains pure and deterministic.
+ */
+export function renderAgentKey(face: AgentKeyFace): string {
+	const brand = BRANDS[face.source];
+	const status = face.status === "attention" ? attentionLabel(face.reason) : face.status === "running" || face.status === "started" ? "RUNNING" : "READY";
+	const attention = face.status === "attention";
+	const blinkOn = face.blinkOn === true;
+	const background = attention && blinkOn ? "#5A2A13" : brand.backdrop;
+	const statusColor = attention ? (blinkOn ? "#FFD166" : "#E0A33E") : face.status === "running" || face.status === "started" ? brand.accent : "#9AA0A8";
+	const statusOpacity = attention && !blinkOn ? 0.7 : 1;
+
+	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
+<rect width="${SIZE}" height="${SIZE}" fill="${background}"/>
+<g font-family="Helvetica, Arial, sans-serif" text-anchor="middle">
+<text x="72" y="31" fill="${brand.accent}" font-size="17" font-weight="700" letter-spacing="1.5" opacity="${attention && !blinkOn ? 0.65 : 1}">${escapeText(brand.label)}</text>
+<text x="72" y="83" fill="${attention && blinkOn ? "#FFD166" : "#F2F4F7"}" font-size="48" font-weight="700" style="font-variant-numeric:tabular-nums">${escapeText(String(face.tabNumber))}</text>
+<text x="72" y="108" fill="${statusColor}" font-size="16" font-weight="700" letter-spacing="1" opacity="${statusOpacity}">${escapeText(status)}</text>
+<text x="72" y="130" fill="#9AA0A8" font-size="12" font-weight="600">${attention ? "PRESS TO FOCUS" : "WARP TAB"}</text>
+${attention ? `<circle cx="129" cy="24" r="4.5" fill="${blinkOn ? "#FFD166" : "#E0A33E"}" opacity="${blinkOn ? 1 : 0.55}"/>` : ""}
+</g>
+</svg>`;
+
+	return `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
+}
+
+/** Builds a Warp Tab Config key face with its label positioned inside the artwork. */
+export function renderWarpTabKey(face: WarpTabKeyFace): string {
+	const lines = splitWarpTabLabel(face.label);
+	const longestLine = Math.max(...lines.map((line) => line.length));
+	const labelSize = fitFontSize(longestLine, 16, 9);
+	const labelMarkup = lines
+		.map((line, index) => `<text x="72" y="${lines.length === 1 ? 123 : 114 + index * 17}" fill="#F2F4F7" font-size="${labelSize}" font-weight="700" letter-spacing="0.8">${escapeText(line)}</text>`)
+		.join("\n");
+
+	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
+<rect width="${SIZE}" height="${SIZE}" fill="#0B1220"/>
+<g stroke-linejoin="round">
+<rect x="11" y="15" width="96" height="72" rx="8" fill="#13213A" stroke="#2B67D1" stroke-width="2" opacity="0.78"/>
+<rect x="23" y="23" width="108" height="75" rx="8" fill="#122033" stroke="#39D5FF" stroke-width="2"/>
+<path d="M23 42H131" stroke="#29415D" stroke-width="2"/>
+<circle cx="36" cy="32" r="3" fill="#FFB84D"/>
+<circle cx="46" cy="32" r="3" fill="#5EE6FF"/>
+<circle cx="56" cy="32" r="3" fill="#2B67D1"/>
+<path d="M42 61L51 68L42 75" fill="none" stroke="#5EE6FF" stroke-width="4"/>
+<path d="M57 75H75" stroke="#FFB84D" stroke-width="4"/>
+</g>
+<g font-family="${KEY_FONT_FAMILY}" text-anchor="middle">
+<text x="72" y="93" fill="#7E9DBA" font-size="10" font-weight="600" letter-spacing="1.5">WARP TAB</text>
+${labelMarkup}
+</g>
+</svg>`;
+
+	return `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
+}
+
+function splitWarpTabLabel(value: string | undefined): string[] {
+	const normalized = value?.trim().replace(/[_-]+/g, " ").replace(/\s+/g, " ").toUpperCase() || "SELECT CONFIG";
+	const words = normalized.split(" ");
+	if (words.length <= 1) {
+		return [normalized];
+	}
+
+	const lines: string[] = [];
+	let current = words[0] ?? normalized;
+	for (const word of words.slice(1)) {
+		const candidate = `${current} ${word}`;
+		if (candidate.length <= 14 || lines.length > 0) {
+			current = candidate;
+			continue;
+		}
+
+		lines.push(current);
+		current = word;
+	}
+
+	if (current !== "") {
+		lines.push(current);
+	}
+
+	return lines.length > 0 ? lines : [normalized];
+}
+
+function attentionLabel(reason: string | undefined): string {
+	if (reason === "permission" || reason === "input" || reason === "elicitation") {
+		return "INPUT";
+	}
+
+	return "DONE";
 }
 
 /**

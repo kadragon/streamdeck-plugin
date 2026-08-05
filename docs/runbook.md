@@ -25,6 +25,38 @@ bash /c/dev/stream-deck-plugin/scripts/statusline-usage-snapshot.sh
 
 The wrapper writes `~/.claude/ai-usage/claude.json` and `claude-history.jsonl`, then forwards stdin to the latest `claude-hud` plugin when available.
 
+### Warp agent attention
+
+Build and link the plugin, then add an Agent Attention action for each fixed Warp tab slot. Start each
+interactive agent through `scripts/agent-wrap.mjs`:
+
+```powershell
+node C:/dev/stream-deck-plugin/scripts/agent-wrap.mjs --source claude --tab 1 -- claude
+node C:/dev/stream-deck-plugin/scripts/agent-wrap.mjs --source codex --tab 2 -- codex
+```
+
+Merge `scripts/claude-agent-hooks.example.json` into `~/.claude/settings.json` and
+`scripts/codex-agent-hooks.example.json` into `~/.codex/hooks.json`, replacing the placeholder script
+path with this repository's absolute path. The hook process inherits the wrapper's slot/runtime
+environment. `AGENT_ATTENTION_STATE_DIR` overrides the shared local event directory when WSL or another
+agent environment cannot see the plugin's default home directory.
+
+The focus adapter uses `Ctrl+1` through `Ctrl+8` on Windows and `Cmd+1` through `Cmd+8` on macOS. On
+Windows it keeps Warp maximized before selecting the tab; macOS leaves the current window mode
+unchanged. System Events may require Accessibility permission. v1 does not support dynamic tab
+discovery, tab 9, multiple Warp windows, or tab reordering.
+
+### Warp Tab Config launcher
+
+Add the **Warp Tab Config** action, choose one saved config in its Property Inspector, and press the key
+to open that config as a new Warp tab. The selector reads local `.toml` files from Warp's `tab_configs`
+directory and uses the filename stem for the Warp URI. Use the selector's refresh button after adding or
+renaming a config.
+
+On Windows, the stable directory is `%APPDATA%\\warp\\Warp\\data\\tab_configs\\`; macOS uses
+`~/.warp/tab_configs/`; Linux uses `${XDG_DATA_HOME:-$HOME/.local/share}/warp-terminal/tab_configs/`.
+Preview configs are listed when present and use Warp's `warppreview://` URI scheme.
+
 ### Verify
 
 - `npm run typecheck` exits 0.
@@ -38,7 +70,8 @@ The wrapper writes `~/.claude/ai-usage/claude.json` and `claude-history.jsonl`, 
 | `npm run typecheck` | TypeScript check without emitting |
 | `npm run build` | Rollup production bundle |
 | `npm run check:principles` | Golden-principle structural checks with agent-readable fixes |
-| `npm run check` | Typecheck, principle checks, and build |
+| `npm run test:agent-attention` | Wrapper, hook classification, and atomic event-spool smoke checks |
+| `npm run check` | Typecheck, principle checks, Agent Attention smoke checks, and build |
 | `npm run watch` | Watch/rebuild and restart the linked plugin |
 | `streamdeck validate` | Remote Stream Deck package validation; requires network access |
 

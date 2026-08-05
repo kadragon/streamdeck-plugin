@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+	<head lang="en">
+		<meta charset="utf-8" />
+		<!-- Vendored (sdpi-components v4.0.1) so the inspector works offline and pins the exact version. -->
+		<script src="sdpi-components.js"></script>
+	</head>
+	<body>
+		<sdpi-item label="Tab Config">
+			<sdpi-select
+				setting="tabConfig"
+				datasource="warpTabConfigs"
+				loading="Loading Warp Tab Configs..."
+				placeholder="Select a Tab Config"
+				show-refresh
+			></sdpi-select>
+		</sdpi-item>
+		<p class="sdpi-info">
+			Select a saved Warp Tab Config. The list reads local .toml files; use the refresh button after
+			creating or renaming a config. Pressing the key opens the selected config in Warp.
+		</p>
+	</body>
+</html>

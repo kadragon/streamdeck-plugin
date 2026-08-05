@@ -1,0 +1,35 @@
+{
+	"hooks": {
+		"SessionStart": [{
+			"hooks": [{
+				"type": "command",
+				"command": "node /absolute/path/to/stream-deck-plugin/scripts/agent-event.mjs --source claude"
+			}]
+		}],
+		"UserPromptSubmit": [{
+			"hooks": [{
+				"type": "command",
+				"command": "node /absolute/path/to/stream-deck-plugin/scripts/agent-event.mjs --source claude"
+			}]
+		}],
+		"Stop": [{
+			"hooks": [{
+				"type": "command",
+				"command": "node /absolute/path/to/stream-deck-plugin/scripts/agent-event.mjs --source claude"
+			}]
+		}],
+		"Notification": [{
+			"matcher": "permission_prompt|idle_prompt|elicitation_dialog|agent_needs_input|agent_completed",
+			"hooks": [{
+				"type": "command",
+				"command": "node /absolute/path/to/stream-deck-plugin/scripts/agent-event.mjs --source claude"
+			}]
+		}],
+		"SessionEnd": [{
+			"hooks": [{
+				"type": "command",
+				"command": "node /absolute/path/to/stream-deck-plugin/scripts/agent-event.mjs --source claude"
+			}]
+		}]
+	}
+}

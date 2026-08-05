@@ -1,0 +1,100 @@
+import assert from "node:assert/strict";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { once } from "node:events";
+import { spawn } from "node:child_process";
+
+import { classifyHookEvent, writeAgentEvent } from "./agent-event.mjs";
+
+const root = await fs.mkdtemp(path.join(os.tmpdir(), "ai-usage-agent-attention-"));
+
+try {
+	assert.deepEqual(classifyHookEvent("claude", { hook_event_name: "Stop" }), {
+		status: "attention",
+		reason: "completed"
+	});
+	assert.deepEqual(classifyHookEvent("claude", { hook_event_name: "Notification", notification_type: "permission_prompt" }), {
+		status: "attention",
+		reason: "permission"
+	});
+	assert.deepEqual(classifyHookEvent("codex", { hook_event_name: "PermissionRequest" }), {
+		status: "attention",
+		reason: "permission"
+	});
+	assert.deepEqual(classifyHookEvent("codex", { hook_event_name: "Stop" }), {
+		status: "attention",
+		reason: "completed"
+	});
+	assert.deepEqual(classifyHookEvent("codex", { hook_event_name: "UserPromptSubmit" }), {
+		status: "running",
+		reason: "prompt"
+	});
+	assert.deepEqual(classifyHookEvent("claude", { hook_event_name: "SessionEnd" }), {
+		status: "exited",
+		reason: "session-end"
+	});
+
+	await writeAgentEvent(
+		{
+			source: "claude",
+			runtimeId: "smoke-runtime",
+			slot: 2,
+			cwd: root,
+			status: "attention",
+			reason: "input",
+			timestamp: new Date().toISOString()
+		},
+		root
+	);
+	const firstFiles = await fs.readdir(path.join(root, "events"));
+	assert.equal(firstFiles.length, 1);
+	assert.equal(firstFiles[0].endsWith(".json"), true);
+	assert.equal(firstFiles[0].includes(".tmp"), false);
+
+	const hookState = path.join(root, "hook-state");
+	const hookPath = path.resolve("scripts", "agent-event.mjs");
+	const hook = spawn(process.execPath, [hookPath, "--source", "claude"], {
+		env: {
+			...process.env,
+			AGENT_ATTENTION_STATE_DIR: hookState,
+			AGENT_ATTENTION_RUNTIME_ID: "hook-runtime",
+			AGENT_ATTENTION_TAB: "4"
+		},
+		stdio: ["pipe", "ignore", "ignore"],
+		windowsHide: true
+	});
+	hook.stdin.end(JSON.stringify({ hook_event_name: "Stop", session_id: "not-used", cwd: root, prompt: "not persisted" }));
+	const [hookExitCode] = await once(hook, "exit");
+	assert.equal(hookExitCode, 0);
+	const hookFiles = await fs.readdir(path.join(hookState, "events"));
+	assert.equal(hookFiles.length, 1);
+	const hookEvent = JSON.parse(await fs.readFile(path.join(hookState, "events", hookFiles[0]), "utf8"));
+	assert.deepEqual(
+		{ source: hookEvent.source, runtimeId: hookEvent.runtimeId, slot: hookEvent.slot, status: hookEvent.status },
+		{ source: "claude", runtimeId: "hook-runtime", slot: 4, status: "attention" }
+	);
+	assert.equal(Object.hasOwn(hookEvent, "prompt"), false);
+
+	const wrapperPath = path.resolve("scripts", "agent-wrap.mjs");
+	const child = spawn(
+		process.execPath,
+		[wrapperPath, "--source", "codex", "--tab", "3", "--state-dir", root, "--", process.execPath, "-e", "process.exit(0)"],
+		{ stdio: "ignore", windowsHide: true }
+	);
+	const [exitCode] = await once(child, "exit");
+	assert.equal(exitCode, 0);
+
+	const eventFiles = await fs.readdir(path.join(root, "events"));
+	const events = await Promise.all(
+		eventFiles.map(async (file) => JSON.parse(await fs.readFile(path.join(root, "events", file), "utf8")))
+	);
+	assert.deepEqual(
+		events.filter((event) => event.source === "codex").map((event) => event.status).sort(),
+		["exited", "started"]
+	);
+
+	console.log("agent attention smoke checks passed");
+} finally {
+	await fs.rm(root, { recursive: true, force: true });
+}

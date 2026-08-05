@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+	<head lang="en">
+		<meta charset="utf-8" />
+		<!-- Vendored (sdpi-components v4.0.1) so the inspector works offline and pins the exact version. -->
+		<script src="sdpi-components.js"></script>
+	</head>
+	<body>
+		<sdpi-item label="Source">
+			<sdpi-select setting="source" default="claude">
+				<option value="claude">Claude Code</option>
+				<option value="codex">Codex CLI</option>
+			</sdpi-select>
+		</sdpi-item>
+		<sdpi-item label="Warp tab">
+			<sdpi-range setting="tabNumber" default="1" min="1" max="8" step="1" showlabels>
+				<span slot="min">1</span>
+				<span slot="max">8</span>
+			</sdpi-range>
+		</sdpi-item>
+		<p class="sdpi-info">
+			Choose the source launched through the wrapper; source detection is not automatic in v1. Run the
+			agent with the same tab number. Pressing this key focuses that fixed Warp tab. v1 supports one
+			Warp window and tabs 1-8.
+		</p>
+	</body>
+</html>
