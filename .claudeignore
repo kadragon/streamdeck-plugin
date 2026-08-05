@@ -1,0 +1,19 @@
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+logs/
+.claude/tmp/
+
+# Editor and OS metadata
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Dependencies and generated output
+node_modules/
+com.kadragon.aiusage.sdPlugin/bin/
+*.map
+coverage/
+.cache/

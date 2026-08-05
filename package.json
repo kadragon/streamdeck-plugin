@@ -4,7 +4,10 @@
     "private": true,
     "description": "Stream Deck plugin showing weekly rate-limit usage for Claude Code and Codex CLI.",
     "scripts": {
+        "typecheck": "tsc --noEmit",
         "build": "rollup -c",
+        "check:principles": "node scripts/check-principles.mjs",
+        "check": "npm run typecheck && npm run check:principles && npm run build",
         "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.kadragon.aiusage\""
     },
     "type": "module",

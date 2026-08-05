@@ -4,3 +4,7 @@ node_modules/
 # Stream Deck files
 *.sdPlugin/bin
 *.sdPlugin/logs
+
+# Session-only harness state
+.claude/tmp/
+tools/.sweep-stamp
