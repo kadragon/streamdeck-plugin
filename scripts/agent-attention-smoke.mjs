@@ -53,6 +53,37 @@ try {
 	assert.equal(firstFiles[0].endsWith(".json"), true);
 	assert.equal(firstFiles[0].includes(".tmp"), false);
 
+	// A writer prunes its own stale files, so the spool stays bounded even when the plugin never
+	// runs and nothing consumes it.
+	const pruneRoot = path.join(root, "prune");
+	const pruneEvents = path.join(pruneRoot, "events");
+	await fs.mkdir(pruneEvents, { recursive: true });
+	const staleStamp = Date.now() - 20 * 60 * 1000;
+	const staleJson = `.${staleStamp}-1234-stale.json`;
+	const staleTemporary = `.${staleStamp}-1234-stale.tmp`;
+	const foreignName = "keep-me.json";
+	await fs.writeFile(path.join(pruneEvents, staleJson), "{}\n", "utf8");
+	await fs.writeFile(path.join(pruneEvents, staleTemporary), "{}\n", "utf8");
+	await fs.writeFile(path.join(pruneEvents, foreignName), "{}\n", "utf8");
+
+	await writeAgentEvent(
+		{
+			source: "codex",
+			runtimeId: "prune-runtime",
+			slot: 1,
+			cwd: root,
+			status: "running",
+			reason: "prompt",
+			timestamp: new Date().toISOString()
+		},
+		pruneRoot
+	);
+	const prunedFiles = await fs.readdir(pruneEvents);
+	assert.equal(prunedFiles.includes(staleJson), false, "stale event file survived the prune");
+	assert.equal(prunedFiles.includes(staleTemporary), false, "orphaned temporary file survived the prune");
+	assert.equal(prunedFiles.includes(foreignName), true, "prune removed a file it did not write");
+	assert.equal(prunedFiles.filter((file) => file.startsWith(".")).length, 1, "fresh event was not the only spooled file");
+
 	const hookState = path.join(root, "hook-state");
 	const hookPath = path.resolve("scripts", "agent-event.mjs");
 	const hook = spawn(process.execPath, [hookPath, "--source", "claude"], {
