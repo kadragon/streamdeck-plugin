@@ -60,11 +60,21 @@ export class WeeklyLimit extends SingletonAction<WeeklyLimitSettings> {
 	/** Wall-clock of the last refresh per action, so each key honours its own refresh interval. */
 	readonly #lastRefresh = new Map<string, number>();
 
+	/**
+	 * Latest settings per action.
+	 *
+	 * `action.getSettings()` is an IPC round-trip to the Stream Deck app, not a local read, so calling it
+	 * on every tick would put a request per key per second on the wire. Every settings change arrives as
+	 * an event anyway, so the events are the source of truth.
+	 */
+	readonly #settings = new Map<string, WeeklyLimitSettings>();
+
 	/** The shared ticker; it exists only while at least one key is visible. */
 	#ticker?: NodeJS.Timeout;
 
 	override async onWillAppear(ev: WillAppearEvent<WeeklyLimitSettings>): Promise<void> {
 		this.#startTicker();
+		this.#settings.set(ev.action.id, ev.payload.settings);
 		if (ev.action.isKey()) {
 			await this.#refresh(ev.action, ev.payload.settings);
 		}
@@ -72,15 +82,17 @@ export class WeeklyLimit extends SingletonAction<WeeklyLimitSettings> {
 
 	override onWillDisappear(ev: WillDisappearEvent<WeeklyLimitSettings>): void {
 		this.#lastRefresh.delete(ev.action.id);
+		this.#settings.delete(ev.action.id);
 
-		// `actions` still includes the disappearing key at this point, hence the id comparison.
-		const remaining = [...this.actions].filter((visible) => visible.id !== ev.action.id);
-		if (remaining.length === 0) {
+		// The SDK removes the action from `actions` before this handler runs, so what is left here is
+		// exactly the keys that stay visible.
+		if ([...this.actions].length === 0) {
 			this.#stopTicker();
 		}
 	}
 
 	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<WeeklyLimitSettings>): Promise<void> {
+		this.#settings.set(ev.action.id, ev.payload.settings);
 		if (ev.action.isKey()) {
 			await this.#refresh(ev.action, ev.payload.settings);
 		}
@@ -107,7 +119,7 @@ export class WeeklyLimit extends SingletonAction<WeeklyLimitSettings> {
 	async refreshAll(): Promise<void> {
 		for (const visible of this.actions) {
 			if (visible.isKey()) {
-				await this.#refresh(visible, await visible.getSettings());
+				await this.#refresh(visible, this.#settings.get(visible.id) ?? {});
 			}
 		}
 	}
@@ -116,7 +128,11 @@ export class WeeklyLimit extends SingletonAction<WeeklyLimitSettings> {
 	 * Ticks every second so each key can refresh as soon as its own interval elapses.
 	 */
 	#startTicker(): void {
-		this.#ticker ??= setInterval(() => void this.#tick(), 1000);
+		// A rejection escaping the callback would be an unhandled rejection, which Node terminates the
+		// plugin process over; the ticker has to swallow and log instead.
+		this.#ticker ??= setInterval(() => {
+			this.#tick().catch((err) => streamDeck.logger.error("usage tick failed", err));
+		}, 1000);
 	}
 
 	#stopTicker(): void {
@@ -134,7 +150,7 @@ export class WeeklyLimit extends SingletonAction<WeeklyLimitSettings> {
 				continue;
 			}
 
-			const settings = await visible.getSettings();
+			const settings = this.#settings.get(visible.id) ?? {};
 			const intervalMs = Math.max(5, settings.refreshSeconds ?? DEFAULT_REFRESH_SECONDS) * 1000;
 			if (now - (this.#lastRefresh.get(visible.id) ?? 0) < intervalMs) {
 				continue;

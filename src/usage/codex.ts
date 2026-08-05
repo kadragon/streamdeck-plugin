@@ -39,6 +39,9 @@ type Observation = {
 	at: Date;
 };
 
+/** The last reading, kept so an untouched rollout set does not have to be re-read. */
+let cached: { fingerprint: string; reading: UsageReading } | undefined;
+
 /**
  * Reads the most recent weekly rate-limit percentage Codex CLI recorded in `~/.codex/sessions`.
  *
@@ -47,6 +50,16 @@ type Observation = {
  */
 export async function readCodexUsage(sessionsDir = path.join(os.homedir(), ".codex", "sessions")): Promise<UsageReading> {
 	const files = await newestRollouts(sessionsDir);
+
+	// While Codex sits idle the scan never accumulates enough span to stop early, so without this it
+	// would re-read every rollout tail — megabytes — on each refresh, forever, to reproduce a reading
+	// that cannot have changed. Codex only ever appends, so the newest rollout's size and mtime settle
+	// the question.
+	const fingerprint = await newestFingerprint(files[0]);
+	if (fingerprint !== undefined && cached?.fingerprint === fingerprint) {
+		return cached.reading;
+	}
+
 	const observations: Observation[] = [];
 
 	for (const file of files) {
@@ -66,12 +79,34 @@ export async function readCodexUsage(sessionsDir = path.join(os.homedir(), ".cod
 	observations.sort((a, b) => a.at.getTime() - b.at.getTime());
 	const latest = observations[observations.length - 1];
 
-	return {
+	const reading: UsageReading = {
 		usedPercent: latest.usedPercent,
 		resetsAt: latest.resetsAt,
 		observedAt: latest.at,
 		history: observations.slice(0, -1).map(({ at, usedPercent }) => ({ at, usedPercent }))
 	};
+
+	if (fingerprint !== undefined) {
+		cached = { fingerprint, reading };
+	}
+
+	return reading;
+}
+
+/**
+ * Identifies the state of the newest rollout, so an unchanged one can be recognised without reading it.
+ */
+async function newestFingerprint(file: string | undefined): Promise<string | undefined> {
+	if (file === undefined) {
+		return undefined;
+	}
+
+	try {
+		const { size, mtimeMs } = await fs.stat(file);
+		return `${file}:${size}:${mtimeMs}`;
+	} catch {
+		return undefined;
+	}
 }
 
 /**
@@ -166,16 +201,23 @@ function toObservation(line: string): Observation | undefined {
 
 	const limits = record?.payload?.rate_limits ?? record?.rate_limits ?? record?.payload?.info?.rate_limits;
 	const weekly = pickWeeklyWindow(limits);
-	if (weekly?.used_percent === undefined) {
+	// A `null` percentage would otherwise pass an `=== undefined` guard and render as 0% — the one
+	// misreport a quota gauge must never make.
+	if (typeof weekly?.used_percent !== "number" || !Number.isFinite(weekly.used_percent)) {
 		return undefined;
 	}
 
-	const at = record?.timestamp !== undefined ? new Date(record.timestamp) : new Date();
+	// An observation with no usable time cannot be judged fresh and would enter the burn rate as a
+	// same-instant sample, so it is dropped rather than dated to now.
+	const at = new Date(record?.timestamp ?? NaN);
+	if (Number.isNaN(at.getTime())) {
+		return undefined;
+	}
 
 	return {
 		usedPercent: weekly.used_percent,
-		resetsAt: weekly.resets_at !== undefined ? new Date(weekly.resets_at * 1000) : undefined,
-		at: Number.isNaN(at.getTime()) ? new Date() : at
+		resetsAt: typeof weekly.resets_at === "number" ? new Date(weekly.resets_at * 1000) : undefined,
+		at
 	};
 }
 

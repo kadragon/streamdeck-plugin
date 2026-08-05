@@ -35,7 +35,11 @@ if command -v jq >/dev/null 2>&1; then
   ' 2>/dev/null)
 
   if [ -n "$observation" ]; then
-    printf '%s\n' "$observation" > "$SNAPSHOT.tmp" && mv -f "$SNAPSHOT.tmp" "$SNAPSHOT"
+    # Every concurrent Claude Code session renders its status line through this same script, so the temp
+    # names carry the pid: a shared one lets a second process write into the file a first has already
+    # published, and the plugin reads back half a JSON document.
+    trap 'rm -f "$SNAPSHOT.$$.tmp" "$HISTORY.$$.tmp"' EXIT
+    printf '%s\n' "$observation" > "$SNAPSHOT.$$.tmp" && mv -f "$SNAPSHOT.$$.tmp" "$SNAPSHOT"
 
     current=$(printf '%s' "$observation" | jq -r '.seven_day.used_percentage // empty')
     previous=$(tail -n 1 "$HISTORY" 2>/dev/null | jq -r '.seven_day.used_percentage // empty' 2>/dev/null)
@@ -45,7 +49,7 @@ if command -v jq >/dev/null 2>&1; then
 
       lines=$(wc -l < "$HISTORY" 2>/dev/null || echo 0)
       if [ "$lines" -gt "$HISTORY_MAX_LINES" ]; then
-        tail -n "$HISTORY_TRIM_TO" "$HISTORY" > "$HISTORY.tmp" && mv -f "$HISTORY.tmp" "$HISTORY"
+        tail -n "$HISTORY_TRIM_TO" "$HISTORY" > "$HISTORY.$$.tmp" && mv -f "$HISTORY.$$.tmp" "$HISTORY"
       fi
     fi
   fi
@@ -57,4 +61,20 @@ cols=$({ stty size </dev/tty; } 2>/dev/null | awk '{print $2}')
 export COLUMNS=$(( ${cols:-120} > 4 ? ${cols:-120} - 4 : 1 ))
 plugin_dir=$(ls -1d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/*/claude-hud/*/ 2>/dev/null | sort -V | tail -1)
 
-printf '%s' "$input" | exec "/c/Program Files/nodejs/node" "${plugin_dir}dist/index.js"
+# The snapshot above is already written, so a missing claude-hud costs nothing but an empty status line —
+# far better than the "Cannot find module" that running node against an empty path would print there.
+if [ -z "$plugin_dir" ] || [ ! -f "${plugin_dir}dist/index.js" ]; then
+  exit 0
+fi
+
+# Prefer whatever node is on PATH; the Git Bash style path is only a fallback for the Windows installer
+# default, which is not on PATH in every shell Claude Code spawns this from.
+node_bin=$(command -v node 2>/dev/null || true)
+if [ -z "$node_bin" ] && [ -x "/c/Program Files/nodejs/node" ]; then
+  node_bin="/c/Program Files/nodejs/node"
+fi
+if [ -z "$node_bin" ]; then
+  exit 0
+fi
+
+printf '%s' "$input" | "$node_bin" "${plugin_dir}dist/index.js"

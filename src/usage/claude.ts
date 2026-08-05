@@ -42,16 +42,21 @@ export async function readClaudeUsage(dir = DEFAULT_CLAUDE_DIR): Promise<UsageRe
 	}
 
 	const weekly = snapshot?.seven_day;
-	if (typeof weekly?.used_percentage !== "number") {
+	if (typeof weekly?.used_percentage !== "number" || !Number.isFinite(weekly.used_percentage)) {
 		throw new NoUsageDataError("snapshot has no seven_day.used_percentage");
 	}
 
+	// Without a timestamp the reading cannot be judged fresh, and dating it to the epoch would render a
+	// twenty-thousand-day "ago" caption. No usable time means no usable reading.
 	const observedAt = new Date(snapshot?.updated_at ?? NaN);
+	if (Number.isNaN(observedAt.getTime())) {
+		throw new NoUsageDataError("snapshot has no usable updated_at");
+	}
 
 	return {
 		usedPercent: weekly.used_percentage,
 		resetsAt: toDate(weekly.resets_at),
-		observedAt: Number.isNaN(observedAt.getTime()) ? new Date(0) : observedAt,
+		observedAt,
 		history: await readHistory(path.join(dir, HISTORY_FILE))
 	};
 }

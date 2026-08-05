@@ -8,6 +8,8 @@ const weeklyLimit = new WeeklyLimit();
 streamDeck.actions.registerAction(weeklyLimit);
 
 // Nothing is read while the machine sleeps, so every key is out of date on wake.
-streamDeck.system.onSystemDidWakeUp(() => void weeklyLimit.refreshAll());
+streamDeck.system.onSystemDidWakeUp(() => {
+	weeklyLimit.refreshAll().catch((err) => streamDeck.logger.error("wake refresh failed", err));
+});
 
 streamDeck.connect();
