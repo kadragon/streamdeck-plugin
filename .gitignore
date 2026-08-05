@@ -8,3 +8,4 @@ node_modules/
 # Session-only harness state
 .claude/tmp/
 tools/.sweep-stamp
+.agents/.maintenance-stamp
