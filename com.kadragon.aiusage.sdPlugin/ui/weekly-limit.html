@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+	<head lang="en">
+		<meta charset="utf-8" />
+		<!-- Vendored (sdpi-components v4.0.1) so the inspector works offline and pins the exact version. -->
+		<script src="sdpi-components.js"></script>
+	</head>
+	<body>
+		<sdpi-item label="Source">
+			<sdpi-select setting="source" default="claude">
+				<option value="claude">Claude Code</option>
+				<option value="codex">Codex CLI</option>
+			</sdpi-select>
+		</sdpi-item>
+		<sdpi-item label="Refresh">
+			<sdpi-range setting="refreshSeconds" default="60" min="15" max="600" step="15" showlabels>
+				<span slot="min">15s</span>
+				<span slot="max">600s</span>
+			</sdpi-range>
+		</sdpi-item>
+		<sdpi-item label="Alert at">
+			<sdpi-range setting="alertPercent" default="90" min="50" max="100" step="5" showlabels>
+				<span slot="min">50%</span>
+				<span slot="max">100%</span>
+			</sdpi-range>
+		</sdpi-item>
+		<sdpi-item label="Usage page">
+			<sdpi-textfield
+				setting="dashboardUrl"
+				placeholder="https://claude.ai/settings/usage"
+			></sdpi-textfield>
+		</sdpi-item>
+		<p class="sdpi-info">
+			Pressing the key opens this page in your browser. Leave it blank to use the default for the
+			selected source.
+		</p>
+	</body>
+</html>

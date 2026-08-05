@@ -1,0 +1,2 @@
+# The status-line wrapper runs under bash, which fails on CRLF line endings.
+*.sh text eol=lf
