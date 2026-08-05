@@ -1,4 +1,4 @@
-# AI Usage Stream Deck Agent Rules
+# Stream Deck Plugin Agent Rules
 
 ## Docs Index (read on demand)
 

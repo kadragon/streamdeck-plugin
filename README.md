@@ -1,9 +1,15 @@
-# AI Usage — Stream Deck plugin
+# Stream Deck plugin
 
-Shows how much of the **weekly** rate-limit allowance Claude Code and Codex CLI have consumed, on a
-Stream Deck key each. Everything is read from files the tools write locally; the plugin never calls an API.
+A personal Stream Deck plugin bundling the keys I use while working with terminal AI agents. Everything
+is read from files the tools write locally; the plugin never calls an API.
 
-## Where the numbers come from
+| Action | What the key does |
+| --- | --- |
+| **Weekly Limit** | Shows how much of the weekly rate-limit allowance Claude Code or Codex CLI has consumed |
+| **Agent Attention** | Blinks when a wrapped agent session needs you, and focuses its Warp tab when pressed |
+| **Warp Tab Config** | Opens one of Warp's saved Tab Configs |
+
+## Weekly Limit — where the numbers come from
 
 | Source | Origin | Freshness |
 | --- | --- | --- |

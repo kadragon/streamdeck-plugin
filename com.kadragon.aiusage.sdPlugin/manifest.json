@@ -1,5 +1,5 @@
 {
-	"Name": "AI Usage",
+	"Name": "Dev Toolkit",
 	"Version": "0.3.0.0",
 	"Author": "kadragon",
 	"Actions": [
@@ -52,7 +52,7 @@
 			]
 		}
 	],
-	"Category": "AI Usage",
+	"Category": "Dev Toolkit",
 	"CategoryIcon": "imgs/plugin/category-icon",
 	"CodePath": "bin/plugin.js",
 	"Description": "Shows weekly rate-limit usage, Warp tab attention, and selected Warp Tab Config launchers.",
