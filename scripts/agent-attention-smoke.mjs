@@ -6,6 +6,7 @@ import { once } from "node:events";
 import { spawn } from "node:child_process";
 
 import { classifyHookEvent, writeAgentEvent } from "./agent-event.mjs";
+import { resolveCommand } from "./agent-wrap.mjs";
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "ai-usage-agent-attention-"));
 
@@ -92,6 +93,33 @@ try {
 	assert.deepEqual(
 		events.filter((event) => event.source === "codex").map((event) => event.status).sort(),
 		["exited", "started"]
+	);
+
+	// `claude` and `codex` are reached by bare name on PATH, and on Windows they are batch shims that
+	// spawn cannot launch directly — so the wrapper is exercised against a PATH-resolved name, not
+	// only against an absolute executable path.
+	assert.equal(resolveCommand("./relative-only", { PATHEXT: ".EXE" }, "linux"), "./relative-only");
+	const resolvedNpm = resolveCommand("npm");
+	if (process.platform === "win32") {
+		assert.equal(path.extname(resolvedNpm) !== "", true, `npm did not resolve to a concrete file: ${resolvedNpm}`);
+	}
+
+	const shimRoot = path.join(root, "shim");
+	const shimChild = spawn(
+		process.execPath,
+		[wrapperPath, "--source", "claude", "--tab", "4", "--state-dir", shimRoot, "--", "npm", "--version"],
+		{ stdio: "ignore", windowsHide: true }
+	);
+	const [shimExitCode] = await once(shimChild, "exit");
+	assert.equal(shimExitCode, 0, "wrapper failed to launch a PATH-resolved command");
+
+	const shimFiles = await fs.readdir(path.join(shimRoot, "events"));
+	const shimEvents = await Promise.all(
+		shimFiles.map(async (file) => JSON.parse(await fs.readFile(path.join(shimRoot, "events", file), "utf8")))
+	);
+	assert.deepEqual(
+		shimEvents.map((event) => event.reason).sort(),
+		["process-exit", "process-start"]
 	);
 
 	console.log("agent attention smoke checks passed");

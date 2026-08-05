@@ -201,7 +201,15 @@ function normalizeTabConfigStem(value: string): string | undefined {
 		? value.slice(0, -TAB_CONFIG_EXTENSION.length)
 		: value;
 
-	if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(withoutExtension)) {
+	// Warp lets a saved Tab Config be named freely, so the stem is rejected only for what would make
+	// it unsafe as a path segment or as a URI component: traversal, separators, drive separators,
+	// wildcards, quoting, and control characters. Everything else is URI-encoded when the URL is built.
+	if (withoutExtension === "" || withoutExtension === "." || withoutExtension === "..") {
+		return undefined;
+	}
+
+	// eslint-disable-next-line no-control-regex -- control characters are exactly what must be rejected
+	if (/[\\/:*?"<>|\u0000-\u001F]/.test(withoutExtension)) {
 		return undefined;
 	}
 
@@ -253,13 +261,24 @@ async function readDisplayName(filePath: string, fallback: string): Promise<stri
 		return fallback;
 	}
 
-	const match = /^\s*name\s*=\s*(?:"((?:\\.|[^"])*)"|'([^']*)')\s*$/m.exec(content);
-	const name = match?.[1] ?? match?.[2];
-	if (name === undefined || name.trim() === "") {
-		return fallback;
+	// Scanned line by line and stopped at the first table header so a `name` inside a table such as
+	// [[panes]] is never mistaken for the config's own top-level name.
+	for (const line of content.split(/\r?\n/)) {
+		if (/^\s*\[/.test(line)) {
+			break;
+		}
+
+		const match = /^\s*name\s*=\s*(?:"((?:\\.|[^"\\])*)"|'([^']*)')\s*$/.exec(line);
+		const name = match?.[1] ?? match?.[2];
+		if (name === undefined) {
+			continue;
+		}
+
+		const display = name.replace(/\\(["\\])/g, "$1").trim();
+		return display === "" ? fallback : display;
 	}
 
-	return name.replace(/\\(["\\])/g, "$1").trim();
+	return fallback;
 }
 
 function formatLabel(source: TabConfigDirectory, displayName: string, stem: string): string {

@@ -35,7 +35,9 @@ export class AgentAttention extends SingletonAction<AgentAttentionSettings> {
 		onError: (error) => streamDeck.logger.error("agent attention monitor failed", error)
 	});
 	readonly #settings = new Map<string, AgentAttentionSettings>();
+	readonly #renderedFaces = new Map<string, string>();
 	#ticker?: NodeJS.Timeout;
+	#blinkTick = 0;
 	#renderInFlight = false;
 
 	constructor() {
@@ -47,12 +49,13 @@ export class AgentAttention extends SingletonAction<AgentAttentionSettings> {
 		this.#settings.set(ev.action.id, ev.payload.settings);
 		this.#startService();
 		if (ev.action.isKey()) {
-			await this.#refresh(ev.action, ev.payload.settings);
+			await this.#refresh(ev.action, ev.payload.settings, true);
 		}
 	}
 
 	override onWillDisappear(ev: WillDisappearEvent<AgentAttentionSettings>): void {
 		this.#settings.delete(ev.action.id);
+		this.#renderedFaces.delete(ev.action.id);
 
 		if ([...this.actions].length === 0) {
 			this.#stopService();
@@ -62,7 +65,7 @@ export class AgentAttention extends SingletonAction<AgentAttentionSettings> {
 	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<AgentAttentionSettings>): Promise<void> {
 		this.#settings.set(ev.action.id, ev.payload.settings);
 		if (ev.action.isKey()) {
-			await this.#refresh(ev.action, ev.payload.settings);
+			await this.#refresh(ev.action, ev.payload.settings, true);
 		}
 	}
 
@@ -83,6 +86,7 @@ export class AgentAttention extends SingletonAction<AgentAttentionSettings> {
 
 	#startService(): void {
 		this.#ticker ??= setInterval(() => {
+			this.#blinkTick += 1;
 			this.#renderVisible().catch((error) => streamDeck.logger.error("agent attention render failed", error));
 		}, BLINK_INTERVAL_MS);
 
@@ -131,22 +135,37 @@ export class AgentAttention extends SingletonAction<AgentAttentionSettings> {
 		}
 	}
 
-	async #refresh(target: KeyAction<AgentAttentionSettings>, settings: AgentAttentionSettings): Promise<void> {
+	/**
+	 * Repaints the key only when its rendered face actually changed.
+	 *
+	 * The ticker runs continuously so a blinking key stays in phase, but an idle key would otherwise
+	 * cost two Stream Deck round-trips per second forever.
+	 */
+	async #refresh(
+		target: KeyAction<AgentAttentionSettings>,
+		settings: AgentAttentionSettings,
+		force = false
+	): Promise<void> {
 		const source = normalizeUsageSource(settings.source) ?? DEFAULT_SOURCE;
 		const tabNumber = normalizeWarpTab(settings.tabNumber) ?? DEFAULT_TAB;
 		const snapshot = this.#store.snapshot(source, tabNumber);
 		const attention = this.#store.isAttentionVisible(source, tabNumber);
-		const blinkOn = attention && Math.floor(Date.now() / BLINK_INTERVAL_MS) % 2 === 0;
+		const blinkOn = attention && this.#blinkTick % 2 === 0;
 
+		const face = renderAgentKey({
+			source,
+			tabNumber,
+			status: snapshot?.status === "exited" ? undefined : snapshot?.status,
+			reason: snapshot?.reason,
+			blinkOn
+		});
+
+		if (!force && this.#renderedFaces.get(target.id) === face) {
+			return;
+		}
+
+		this.#renderedFaces.set(target.id, face);
 		await target.setTitle("");
-		await target.setImage(
-			renderAgentKey({
-				source,
-				tabNumber,
-				status: snapshot?.status === "exited" ? undefined : snapshot?.status,
-				reason: snapshot?.reason,
-				blinkOn
-			})
-		);
+		await target.setImage(face);
 	}
 }

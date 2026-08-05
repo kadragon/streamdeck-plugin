@@ -20,7 +20,7 @@ const DANGER_COLOR = "#FF5A5F";
 const STALE_COLOR = "#E0A33E";
 
 /** Font used by key faces whose text is part of the rendered SVG rather than Stream Deck's title layer. */
-const KEY_FONT_FAMILY = "Jetendard, Segoe UI, Helvetica, Arial, sans-serif";
+const KEY_FONT_FAMILY = "Segoe UI, Helvetica, Arial, sans-serif";
 
 /**
  * Per-source branding for the key face; the accent colour is what tells the two keys apart at a glance.
@@ -80,7 +80,7 @@ export function renderKey(face: KeyFace): string {
 
 	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
 <rect width="${SIZE}" height="${SIZE}" fill="${brand.backdrop}"/>
-<g font-family="Helvetica, Arial, sans-serif" text-anchor="middle">
+<g font-family="${KEY_FONT_FAMILY}" text-anchor="middle">
 <text x="72" y="34" fill="${brand.accent}" font-size="19" font-weight="700" letter-spacing="2" opacity="${face.stale ? 0.6 : 1}">${escapeText(brand.label)}</text>
 ${face.stale ? `<circle cx="129" cy="24" r="4.5" fill="${STALE_COLOR}"/>` : ""}
 ${renderValue(hasReading, clamped, numberColor, face.stale === true)}
@@ -108,7 +108,7 @@ export function renderAgentKey(face: AgentKeyFace): string {
 
 	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
 <rect width="${SIZE}" height="${SIZE}" fill="${background}"/>
-<g font-family="Helvetica, Arial, sans-serif" text-anchor="middle">
+<g font-family="${KEY_FONT_FAMILY}" text-anchor="middle">
 <text x="72" y="31" fill="${brand.accent}" font-size="17" font-weight="700" letter-spacing="1.5" opacity="${attention && !blinkOn ? 0.65 : 1}">${escapeText(brand.label)}</text>
 <text x="72" y="83" fill="${attention && blinkOn ? "#FFD166" : "#F2F4F7"}" font-size="48" font-weight="700" style="font-variant-numeric:tabular-nums">${escapeText(String(face.tabNumber))}</text>
 <text x="72" y="108" fill="${statusColor}" font-size="16" font-weight="700" letter-spacing="1" opacity="${statusOpacity}">${escapeText(status)}</text>

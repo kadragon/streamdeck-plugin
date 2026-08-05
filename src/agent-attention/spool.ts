@@ -13,6 +13,14 @@ import {
 const EVENT_DIRECTORY_NAME = "events";
 
 /**
+ * How old a spooled event may be and still be applied.
+ *
+ * Hooks keep writing while no Agent Attention key is visible, so the first poll after a key appears
+ * can find a long backlog. Replaying it would show state that has since been superseded.
+ */
+const EVENT_TTL_MS = 10 * 60 * 1000;
+
+/**
  * Resolves the shared local state directory without touching Claude or Codex configuration.
  *
  * AGENT_ATTENTION_STATE_DIR is intentionally supported so setup scripts and smoke checks can use
@@ -84,7 +92,7 @@ export async function ensureAgentEventDirectory(
  * Reads complete JSON files and consumes them from the spool.
  *
  * A malformed file is removed after the read attempt so one bad local artifact cannot keep the
- * monitor retrying forever.
+ * monitor retrying forever, and an event older than EVENT_TTL_MS is consumed without being applied.
  */
 export async function takeAgentEvents(
 	stateDirectory = resolveAgentAttentionStateDirectory()
@@ -109,7 +117,9 @@ export async function takeAgentEvents(
 			if (event === undefined) {
 				throw new Error("event spool file has an invalid shape");
 			}
-			events.push(event);
+			if (Date.now() - Date.parse(event.timestamp) <= EVENT_TTL_MS) {
+				events.push(event);
+			}
 		} catch (error) {
 			errors.push(error instanceof Error ? error : new Error(String(error)));
 		} finally {

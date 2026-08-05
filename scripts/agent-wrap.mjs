@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { normalizeSource, normalizeTab, resolveStateDirectory, writeAgentEvent } from "./agent-event.mjs";
 
@@ -43,7 +45,7 @@ async function main() {
 		stateDirectory
 	);
 
-	const child = spawn(options.command, options.commandArguments, {
+	const child = spawnCommand(options.command, options.commandArguments, {
 		cwd: process.cwd(),
 		env,
 		stdio: "inherit",
@@ -94,6 +96,63 @@ async function main() {
 	});
 }
 
+/**
+ * Resolves a bare command name against PATH and PATHEXT.
+ *
+ * Windows spawn does neither: `claude` and `codex` are usually npm shims (`codex.cmd`), so the
+ * documented `-- codex` invocation would fail with ENOENT without this lookup. The command is
+ * returned unchanged when nothing matches, so the original spawn error still surfaces.
+ */
+export function resolveCommand(command, env = process.env, platform = process.platform) {
+	if (platform !== "win32") {
+		return command;
+	}
+
+	const extensions = (env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+		.split(";")
+		.map((entry) => entry.trim())
+		.filter((entry) => entry !== "");
+	const names = path.extname(command) === "" ? extensions.map((extension) => command + extension) : [command];
+	const directories = /[\\/]/.test(command)
+		? [""]
+		: (env.PATH ?? env.Path ?? "").split(path.delimiter).filter((entry) => entry !== "");
+
+	for (const directory of directories) {
+		for (const name of names) {
+			const candidate = directory === "" ? name : path.join(directory, name);
+			if (existsSync(candidate)) {
+				return candidate;
+			}
+		}
+	}
+
+	return command;
+}
+
+/**
+ * Starts the wrapped command, routing Windows batch shims through the command processor.
+ *
+ * Node refuses to spawn a `.cmd`/`.bat` file directly, so those are run as an explicit, fully quoted
+ * `cmd.exe /d /s /c` line rather than by handing the argument array to `shell: true`, which would
+ * lose any argument containing a space.
+ */
+function spawnCommand(command, commandArguments, options) {
+	const executable = resolveCommand(command);
+	if (process.platform === "win32" && /\.(?:cmd|bat)$/i.test(executable)) {
+		const line = [executable, ...commandArguments].map(quoteForCommandProcessor).join(" ");
+		return spawn(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", `"${line}"`], {
+			...options,
+			windowsVerbatimArguments: true
+		});
+	}
+
+	return spawn(executable, commandArguments, options);
+}
+
+function quoteForCommandProcessor(value) {
+	return `"${String(value).replace(/"/g, '\\"')}"`;
+}
+
 function parseArguments(argumentsList) {
 	const options = { source: undefined, tab: undefined, stateDirectory: undefined, command: undefined, commandArguments: [] };
 	const separator = argumentsList.indexOf("--");
@@ -136,7 +195,9 @@ async function publish(event, stateDirectory) {
 	}
 }
 
-main().catch((error) => {
-	console.error(error instanceof Error ? error.message : String(error));
-	process.exitCode = 1;
-});
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+	main().catch((error) => {
+		console.error(error instanceof Error ? error.message : String(error));
+		process.exitCode = 1;
+	});
+}

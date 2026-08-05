@@ -18,6 +18,12 @@
 				"command": "node /absolute/path/to/stream-deck-plugin/scripts/agent-event.mjs --source codex"
 			}]
 		}],
+		"PreToolUse": [{
+			"hooks": [{
+				"type": "command",
+				"command": "node /absolute/path/to/stream-deck-plugin/scripts/agent-event.mjs --source codex"
+			}]
+		}],
 		"Stop": [{
 			"hooks": [{
 				"type": "command",
