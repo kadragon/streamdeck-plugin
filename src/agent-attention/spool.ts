@@ -159,7 +159,11 @@ export async function takeAgentEvents(
 				events.push(event);
 			}
 		} catch (error) {
-			errors.push(error instanceof Error ? error : new Error(String(error)));
+			// A writer pruning the same expired file between readdir and readFile is expected, not a
+			// fault: the entry is exactly one this loop would have discarded as too old anyway.
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+				errors.push(error instanceof Error ? error : new Error(String(error)));
+			}
 		} finally {
 			await fs.unlink(filePath).catch((error: NodeJS.ErrnoException) => {
 				if (error.code !== "ENOENT") {
