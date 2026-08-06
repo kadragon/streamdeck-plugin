@@ -20,31 +20,6 @@
 			]
 		},
 		{
-			"Name": "AI Usage Overview",
-			"UUID": "com.kadragon.aiusage.overview",
-			"Icon": "imgs/actions/usage/icon",
-			"Tooltip": "Shows Claude Code and Codex CLI usage together.",
-			"PropertyInspectorPath": "ui/usage-overview.html",
-			"Controllers": [
-				"Keypad",
-				"Encoder"
-			],
-			"Encoder": {
-				"layout": "layouts/usage-overview.json",
-				"TriggerDescription": {
-					"Push": "Cycle usage view",
-					"Rotate": "View usage",
-					"Touch": "View usage"
-				}
-			},
-			"States": [
-				{
-					"Image": "imgs/actions/usage/key",
-					"TitleAlignment": "middle"
-				}
-			]
-		},
-		{
 			"Name": "System Monitor",
 			"UUID": "com.kadragon.aiusage.system-monitor",
 			"Icon": "imgs/actions/usage/icon",
@@ -71,22 +46,6 @@
 			]
 		},
 		{
-			"Name": "Warp URI",
-			"UUID": "com.kadragon.aiusage.warp-uri",
-			"Icon": "imgs/actions/warp-tab-config/icon",
-			"Tooltip": "Opens a validated Warp or Warp Preview URI.",
-			"PropertyInspectorPath": "ui/warp-uri.html",
-			"Controllers": [
-				"Keypad"
-			],
-			"States": [
-				{
-					"Image": "imgs/actions/warp-tab-config/key",
-					"TitleAlignment": "middle"
-				}
-			]
-		},
-		{
 			"Name": "Warp Tab Config",
 			"UUID": "com.kadragon.aiusage.warp-tab-config",
 			"Icon": "imgs/actions/warp-tab-config/icon",
@@ -106,7 +65,7 @@
 	"Category": "Dev Toolkit",
 	"CategoryIcon": "imgs/plugin/category-icon",
 	"CodePath": "bin/plugin.js",
-	"Description": "Shows AI usage, local Windows system metrics, and validated Warp launchers.",
+	"Description": "Shows AI weekly usage, local Windows system metrics, and validated Warp Tab Config launchers.",
 	"Icon": "imgs/plugin/marketplace",
 	"SDKVersion": 3,
 	"Software": {

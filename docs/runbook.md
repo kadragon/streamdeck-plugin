@@ -60,17 +60,6 @@ On Windows, the stable directory is `%APPDATA%\\warp\\Warp\\data\\tab_configs\\`
 `~/.warp/tab_configs/`; Linux uses `${XDG_DATA_HOME:-$HOME/.local/share}/warp-terminal/tab_configs/`.
 Preview configs are listed when present and use Warp's `warppreview://` URI scheme.
 
-### AI Usage Overview
-
-Add **AI Usage Overview** to show Claude Code and Codex CLI together. Choose used percentage, remaining
-percentage, burn rate, or reset countdown in the Property Inspector. Press the key, or push its dial,
-to cycle modes. Missing and stale readings remain visibly distinct from zero.
-
-### Warp URI
-
-Add **Warp URI** for a validated `warp://` or `warppreview://` link such as `warp://action/new_tab`,
-`warp://launch/<config>`, or `warp://settings`. The plugin rejects every other URI scheme.
-
 ### Verify
 
 - `npm run typecheck` exits 0.
@@ -97,7 +86,7 @@ Add **Warp URI** for a validated `warp://` or `warppreview://` link such as `war
 ## Tests
 
 The product test suite uses Node's test runner through `tsx`. It covers reader validation, reset-aware
-burn rate, overview modes, local metric parsing/sampling, and no-data rendering. Run `npm test` before
+burn rate, local metric parsing/sampling, and no-data rendering. Run `npm test` before
 changing reader or burn-rate behavior.
 
 ## Harness Operations

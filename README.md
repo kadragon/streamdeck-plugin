@@ -6,10 +6,8 @@ is read from local files or native local commands; the plugin never calls an API
 | Action | What the key does |
 | --- | --- |
 | **Weekly Limit** | Shows how much of the weekly rate-limit allowance Claude Code or Codex CLI has consumed |
-| **AI Usage Overview** | Shows Claude Code and Codex CLI usage together, with used, remaining, burn-rate, and reset views |
 | **System Monitor** | Shows local Windows CPU, RAM, disk, network, NVIDIA GPU, memory, and power metrics |
 | **Warp Tab Config** | Opens one of Warp's saved Tab Configs |
-| **Warp URI** | Opens a validated Warp or Warp Preview URI |
 
 ## System Monitor (Windows)
 
@@ -29,12 +27,6 @@ The NVIDIA driver must provide `nvidia-smi.exe` on PATH. The key refreshes every
 refreshes again after system wake. Missing counters, an unavailable `nvidia-smi.exe`, and invalid
 readings show `--`; they are never displayed as zero. Available temperatures tint the background green
 below 60 C, amber from 60 through 79.9 C, and red at 80 C or higher.
-
-## AI Usage Overview
-
-The **AI Usage Overview** action shows Claude Code and Codex CLI on one key. Its view can be set to
-used percentage, remaining percentage, recent burn rate, or reset countdown. Press the key, or push
-the dial on Stream Deck+, to cycle between views. It uses the same local files as **Weekly Limit**.
 
 ## Weekly Limit — where the numbers come from
 
@@ -126,9 +118,3 @@ Choose the config in the action's Property Inspector; the list is read from Warp
 through Warp's `warp://tab_config/<filename>` URI scheme, so the configured directory, shell, panes, and
 startup commands remain owned by Warp. Each key press opens the selected config as a new tab in the active
 Warp window.
-
-## Launch a Warp URI
-
-The **Warp URI** action accepts `warp://` and `warppreview://` links such as
-`warp://action/new_tab`, `warp://launch/<config>`, and `warp://settings`. All other URI schemes are
-rejected before the native URI handler is called.

@@ -1,6 +1,5 @@
 import type { UsageSource } from "./usage/types";
 import type { SystemMetricKind } from "./metrics/types";
-import type { OverviewMetric, UsageOverviewMode } from "./usage/overview";
 
 export type { SystemMetricKind } from "./metrics/types";
 
@@ -80,16 +79,6 @@ export type SystemMonitorFace = {
 	status?: "ready" | "missing" | "stale" | "unsupported";
 };
 
-export type UsageOverviewProviderFace = OverviewMetric & {
-	source: UsageSource;
-};
-
-export type UsageOverviewFace = {
-	mode: UsageOverviewMode;
-	claude: UsageOverviewProviderFace;
-	codex: UsageOverviewProviderFace;
-};
-
 /**
  * Builds the key image as an inline SVG data URI.
  */
@@ -133,21 +122,6 @@ export function renderSystemMonitor(face: SystemMonitorFace): string {
 <text x="72" y="55" fill="#F2F4F7" font-size="22" font-weight="700" letter-spacing="1.5">${escapeText(metricLabel)}</text>
 ${usageMarkup}
 ${statusMarkup}
-</g>
-</svg>`;
-
-	return `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
-}
-
-/** Builds the two-provider face used by the AI Usage Overview action. */
-export function renderUsageOverview(face: UsageOverviewFace): string {
-	const modeLabel = face.mode.toUpperCase();
-	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
-<rect width="${SIZE}" height="${SIZE}" fill="#0B1220"/>
-<g font-family="${KEY_FONT_FAMILY}">
-<text x="72" y="22" fill="#F2F4F7" font-size="13" font-weight="700" text-anchor="middle" letter-spacing="1.2">AI USAGE / ${escapeText(modeLabel)}</text>
-${renderOverviewRow(face.claude, 62)}
-${renderOverviewRow(face.codex, 103)}
 </g>
 </svg>`;
 
@@ -353,36 +327,6 @@ function renderSystemStatus(status: SystemMonitorFace["status"]): string {
 	const label = status === "unsupported" ? "UNSUPPORTED" : status === "stale" ? "STALE" : "NO DATA";
 	const color = status === "stale" ? STALE_COLOR : SYSTEM_UNAVAILABLE_COLOR;
 	return `<text x="72" y="132" fill="${color}" font-size="11" font-weight="600" letter-spacing="1">${label}</text>`;
-}
-
-/**
- * Colour for one Usage Overview provider row.
- *
- * Shared by the key SVG and the Stream Deck+ dial feedback so the two faces cannot drift apart.
- */
-export function overviewStateColor(provider: UsageOverviewProviderFace): string {
-	const brand = BRANDS[provider.source];
-	return provider.state === "warning" ? DANGER_COLOR : provider.state === "stale" ? STALE_COLOR : provider.state === "ready" ? brand.accent : SYSTEM_UNAVAILABLE_COLOR;
-}
-
-/** Short status caption for one provider row, or `""` when the reading needs no annotation. */
-export function overviewDetailLabel(provider: UsageOverviewProviderFace): string {
-	return provider.state === "stale" ? "STALE" : provider.detail === "no-burn" ? "NO RATE" : provider.detail === "no-reset" ? "NO RESET" : provider.state === "missing" ? "NO DATA" : "";
-}
-
-/** Brand accent colour for one usage source, used for the provider label on both faces. */
-export function overviewBrandAccent(source: UsageSource): string {
-	return BRANDS[source].accent;
-}
-
-function renderOverviewRow(provider: UsageOverviewProviderFace, y: number): string {
-	const brand = BRANDS[provider.source];
-	const color = overviewStateColor(provider);
-	const detail = overviewDetailLabel(provider);
-	return `<line x1="10" y1="${y + 9}" x2="134" y2="${y + 9}" stroke="#22304A" stroke-width="1"/>
-<text x="14" y="${y}" fill="${brand.accent}" font-size="13" font-weight="700" letter-spacing="1">${escapeText(provider.source.toUpperCase())}</text>
-<text x="130" y="${y}" fill="${color}" font-size="22" font-weight="700" text-anchor="end" style="font-variant-numeric:tabular-nums">${escapeText(provider.text)}</text>
-${detail === "" ? "" : `<text x="14" y="${y + 16}" fill="${color}" font-size="9" font-weight="600" letter-spacing="0.8">${detail}</text>`}`;
 }
 
 function systemMetricLabel(metric: SystemMetricKind): string {

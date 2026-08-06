@@ -16,10 +16,8 @@
 ```text
 src/plugin.ts                  # SDK registration and wake-up refresh
 src/actions/weekly-limit.ts    # Settings, lifecycle, ticker, source selection
-src/actions/usage-overview.ts  # Combined Claude/Codex usage modes and encoder feedback
 src/actions/system-metrics.ts  # Windows-only lifecycle, fifteen-second ticker, wake refresh
 src/actions/warp-tab-config.ts # Dynamic Tab Config selection and URI launch
-src/actions/warp-uri.ts        # Validated Warp and Warp Preview URI launcher
 src/render.ts                  # Pure SVG key-face rendering and time formatting
 src/metrics/windows.ts         # Local PowerShell/Get-Counter and nvidia-smi reader
 src/metrics/types.ts           # Supported local system metric names
@@ -27,7 +25,6 @@ src/warp/                       # Local Warp Tab Config discovery and URI normal
 src/warp/uris.ts                # Validated custom-URI opening across platforms
 src/usage/types.ts             # Reading/sample contracts and no-data error
 src/usage/burn-rate.ts         # Reset-aware burn-rate projection
-src/usage/overview.ts          # Combined usage display-mode calculations
 src/usage/claude.ts            # Claude snapshot/history file reader
 src/usage/codex.ts             # Codex rollout file reader and cache
 scripts/statusline-usage-snapshot.sh
@@ -37,8 +34,6 @@ com.kadragon.aiusage.sdPlugin/
   ui/weekly-limit.html         # Property Inspector settings
   ui/system-monitor.html       # Local system metric selector
   ui/warp-tab-config.html      # Warp Tab Config selector
-  ui/usage-overview.html       # Combined usage settings
-  ui/warp-uri.html             # Warp URI setting
   imgs/                        # Checked-in package artwork
   bin/                         # Generated build output; do not edit
 ```
