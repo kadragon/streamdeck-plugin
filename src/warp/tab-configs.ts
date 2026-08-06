@@ -1,13 +1,9 @@
-import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
+import { openWarpUri } from "./uris";
 
 const TAB_CONFIG_EXTENSION = ".toml";
-const OPEN_URI_TIMEOUT_MS = 5000;
-const execFileAsync = promisify(execFile);
-
 type WarpScheme = "warp" | "warppreview";
 
 type TabConfigDirectory = {
@@ -138,20 +134,7 @@ export async function openWarpTabConfig(value: unknown): Promise<void> {
 		throw new Error("Warp Tab Config selection is invalid");
 	}
 
-	if (process.platform === "win32") {
-		await execFileAsync("cmd.exe", ["/d", "/c", "start", "", url], {
-			timeout: OPEN_URI_TIMEOUT_MS,
-			windowsHide: true
-		});
-		return;
-	}
-
-	if (process.platform === "darwin") {
-		await execFileAsync("open", [url], { timeout: OPEN_URI_TIMEOUT_MS });
-		return;
-	}
-
-	await execFileAsync("xdg-open", [url], { timeout: OPEN_URI_TIMEOUT_MS });
+	await openWarpUri(url);
 }
 
 function normalizeWarpTabConfigUrl(value: string): string | undefined {

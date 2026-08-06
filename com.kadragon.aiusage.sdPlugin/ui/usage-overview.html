@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+	<head lang="en">
+		<meta charset="utf-8" />
+		<!-- Vendored (sdpi-components v4.0.1) so the inspector works offline and pins the exact version. -->
+		<script src="sdpi-components.js"></script>
+	</head>
+	<body>
+		<sdpi-item label="View">
+			<sdpi-select setting="mode" default="used">
+				<option value="used">Used percentage</option>
+				<option value="remaining">Remaining percentage</option>
+				<option value="burn">Burn rate</option>
+				<option value="reset">Reset countdown</option>
+			</sdpi-select>
+		</sdpi-item>
+		<sdpi-item label="Refresh">
+			<sdpi-range setting="refreshSeconds" default="60" min="15" max="600" step="15" showlabels>
+				<span slot="min">15s</span>
+				<span slot="max">600s</span>
+			</sdpi-range>
+		</sdpi-item>
+		<sdpi-item label="Alert at">
+			<sdpi-range setting="alertPercent" default="90" min="50" max="100" step="5" showlabels>
+				<span slot="min">50%</span>
+				<span slot="max">100%</span>
+			</sdpi-range>
+		</sdpi-item>
+		<p class="sdpi-info">
+			The key shows Claude Code and Codex CLI together. Press the key, or push the dial, to cycle
+			between views. Readings remain local and are marked stale when their source has not reported
+			for six hours.
+		</p>
+	</body>
+</html>

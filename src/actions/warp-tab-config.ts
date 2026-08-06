@@ -43,7 +43,8 @@ export class WarpTabConfig extends SingletonAction<WarpTabConfigSettings> {
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<WarpTabConfigSettings>): Promise<void> {
-		const url = normalizeWarpTabConfig(ev.payload.settings.tabConfig);
+		const { tabConfig } = ev.payload.settings;
+		const url = normalizeWarpTabConfig(tabConfig);
 		if (url === undefined) {
 			streamDeck.logger.error("Warp Tab Config key has no valid selection");
 			await ev.action.showAlert();
@@ -51,7 +52,7 @@ export class WarpTabConfig extends SingletonAction<WarpTabConfigSettings> {
 		}
 
 		try {
-			await openWarpTabConfig(url);
+			await openWarpTabConfig(tabConfig);
 		} catch (error) {
 			streamDeck.logger.error(`failed to open Warp Tab Config: ${url}`, error);
 			await ev.action.showAlert();

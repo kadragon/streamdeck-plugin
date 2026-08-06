@@ -1,4 +1,8 @@
 import type { UsageSource } from "./usage/types";
+import type { SystemMetricKind } from "./metrics/types";
+import type { OverviewMetric, UsageOverviewMode } from "./usage/overview";
+
+export type { SystemMetricKind } from "./metrics/types";
 
 /** Stream Deck renders key images on a square canvas; 144px matches the @2x key size. */
 const SIZE = 144;
@@ -67,12 +71,23 @@ export type WarpTabKeyFace = {
 	label?: string;
 };
 
-export type SystemMetricKind = "cpu" | "gpu";
-
 export type SystemMonitorFace = {
 	metric: SystemMetricKind;
+	value?: number;
+	unit?: "percent" | "mbps" | "watts";
 	usagePercent?: number;
 	temperatureC?: number;
+	status?: "ready" | "missing" | "stale" | "unsupported";
+};
+
+export type UsageOverviewProviderFace = OverviewMetric & {
+	source: UsageSource;
+};
+
+export type UsageOverviewFace = {
+	mode: UsageOverviewMode;
+	claude: UsageOverviewProviderFace;
+	codex: UsageOverviewProviderFace;
 };
 
 /**
@@ -104,10 +119,12 @@ ${renderCaption(face.caption ?? "", captionColor)}
 
 /** Builds a deterministic, local-only key face for the Windows System Monitor action. */
 export function renderSystemMonitor(face: SystemMonitorFace): string {
-	const metricLabel = face.metric.toUpperCase();
-	const usageColor = isSystemPercent(face.usagePercent) ? "#F2F4F7" : SYSTEM_UNAVAILABLE_COLOR;
-	const temperature = temperaturePalette(face.temperatureC);
-	const usageMarkup = renderSystemPercent(face.usagePercent, usageColor);
+	const metricLabel = systemMetricLabel(face.metric);
+	const value = face.value ?? face.usagePercent;
+	const usageColor = isSystemValue(face.metric, value) ? "#F2F4F7" : SYSTEM_UNAVAILABLE_COLOR;
+	const temperature = temperaturePalette(face.temperatureC, face.metric, face.status);
+	const usageMarkup = renderSystemValue(face.metric, value, face.unit, usageColor);
+	const statusMarkup = renderSystemStatus(face.status);
 
 	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
 <rect width="${SIZE}" height="${SIZE}" fill="${temperature.background}"/>
@@ -115,6 +132,22 @@ export function renderSystemMonitor(face: SystemMonitorFace): string {
 <g font-family="${KEY_FONT_FAMILY}" text-anchor="middle">
 <text x="72" y="55" fill="#F2F4F7" font-size="22" font-weight="700" letter-spacing="1.5">${escapeText(metricLabel)}</text>
 ${usageMarkup}
+${statusMarkup}
+</g>
+</svg>`;
+
+	return `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
+}
+
+/** Builds the two-provider face used by the AI Usage Overview action. */
+export function renderUsageOverview(face: UsageOverviewFace): string {
+	const modeLabel = face.mode.toUpperCase();
+	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
+<rect width="${SIZE}" height="${SIZE}" fill="#0B1220"/>
+<g font-family="${KEY_FONT_FAMILY}">
+<text x="72" y="22" fill="#F2F4F7" font-size="13" font-weight="700" text-anchor="middle" letter-spacing="1.2">AI USAGE / ${escapeText(modeLabel)}</text>
+${renderOverviewRow(face.claude, 62)}
+${renderOverviewRow(face.codex, 103)}
 </g>
 </svg>`;
 
@@ -244,7 +277,38 @@ function round(value: number): number {
 	return Math.round(value * 10) / 10;
 }
 
-function isSystemPercent(value: number | undefined): value is number {
+export function formatSystemMetric(metric: SystemMetricKind, value: number | undefined, unit?: SystemMonitorFace["unit"]): string {
+	if (!isSystemValue(metric, value)) {
+		return "--";
+	}
+
+	if (unit === "mbps" || metric === "network") {
+		return `${formatDecimal(value)} Mbps`;
+	}
+	if (unit === "watts" || metric === "gpu-power") {
+		return `${formatDecimal(value)} W`;
+	}
+
+	return `${Math.round(value)}%`;
+}
+
+export function systemMetricProgress(metric: SystemMetricKind, value: number | undefined): number | undefined {
+	if (!isSystemValue(metric, value)) {
+		return undefined;
+	}
+
+	const maximum = metric === "network" ? 1_000 : metric === "gpu-power" ? 500 : SYSTEM_MAX_PERCENT;
+	return Math.max(0, Math.min(100, (value / maximum) * 100));
+}
+
+function isSystemValue(metric: SystemMetricKind, value: number | undefined): value is number {
+	if (metric === "network") {
+		return isInRange(value, 0, 100_000);
+	}
+	if (metric === "gpu-power") {
+		return isInRange(value, 0, 2_000);
+	}
+
 	return isInRange(value, SYSTEM_MIN_PERCENT, SYSTEM_MAX_PERCENT);
 }
 
@@ -256,18 +320,17 @@ function isInRange(value: number | undefined, minimum: number, maximum: number):
 	return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum;
 }
 
-function renderSystemPercent(value: number | undefined, color: string): string {
-	if (!isSystemPercent(value)) {
-		return `<text x="72" y="112" fill="${color}" font-size="38" font-weight="700" style="font-variant-numeric:tabular-nums" font-feature-settings="'tnum'">--</text>`;
-	}
-
-	const digits = `${Math.round(value)}`;
-	const size = fitFontSize(digits.length + 0.45, 52, 36);
-	return `<text x="72" y="112" fill="${color}" font-size="${size}" font-weight="700" style="font-variant-numeric:tabular-nums" font-feature-settings="'tnum'">${escapeText(digits)}<tspan font-size="${round(size * 0.45)}" dy="-3">%</tspan></text>`;
+function renderSystemValue(metric: SystemMetricKind, value: number | undefined, unit: SystemMonitorFace["unit"], color: string): string {
+	const formatted = formatSystemMetric(metric, value, unit);
+	const size = fitFontSize(formatted.length, 48, 28);
+	return `<text x="72" y="112" fill="${color}" font-size="${size}" font-weight="700" style="font-variant-numeric:tabular-nums" font-feature-settings="'tnum'">${escapeText(formatted)}</text>`;
 }
 
-function temperaturePalette(value: number | undefined): { background: string; accent: string } {
-	if (!isSystemTemperature(value)) {
+function temperaturePalette(value: number | undefined, metric: SystemMetricKind, status: SystemMonitorFace["status"]): { background: string; accent: string } {
+	if (metric !== "cpu" && metric !== "gpu") {
+		return { background: "#172235", accent: status === "unsupported" ? SYSTEM_UNAVAILABLE_COLOR : "#5E8CFF" };
+	}
+	if (!isSystemTemperature(value) || status === "unsupported") {
 		return { background: SYSTEM_UNAVAILABLE_BACKGROUND, accent: SYSTEM_UNAVAILABLE_COLOR };
 	}
 
@@ -280,6 +343,44 @@ function temperaturePalette(value: number | undefined): { background: string; ac
 	}
 
 	return { background: SYSTEM_GOOD_BACKGROUND, accent: SYSTEM_GOOD_COLOR };
+}
+
+function renderSystemStatus(status: SystemMonitorFace["status"]): string {
+	if (status === undefined || status === "ready") {
+		return "";
+	}
+
+	const label = status === "unsupported" ? "UNSUPPORTED" : status === "stale" ? "STALE" : "NO DATA";
+	const color = status === "stale" ? STALE_COLOR : SYSTEM_UNAVAILABLE_COLOR;
+	return `<text x="72" y="132" fill="${color}" font-size="11" font-weight="600" letter-spacing="1">${label}</text>`;
+}
+
+function renderOverviewRow(provider: UsageOverviewProviderFace, y: number): string {
+	const brand = BRANDS[provider.source];
+	const color = provider.state === "warning" ? DANGER_COLOR : provider.state === "stale" ? STALE_COLOR : provider.state === "ready" ? brand.accent : SYSTEM_UNAVAILABLE_COLOR;
+	const detail = provider.state === "stale" ? "STALE" : provider.detail === "no-burn" ? "NO RATE" : provider.detail === "no-reset" ? "NO RESET" : provider.state === "missing" ? "NO DATA" : "";
+	return `<line x1="10" y1="${y + 9}" x2="134" y2="${y + 9}" stroke="#22304A" stroke-width="1"/>
+<text x="14" y="${y}" fill="${brand.accent}" font-size="13" font-weight="700" letter-spacing="1">${escapeText(provider.source.toUpperCase())}</text>
+<text x="130" y="${y}" fill="${color}" font-size="22" font-weight="700" text-anchor="end" style="font-variant-numeric:tabular-nums">${escapeText(provider.text)}</text>
+${detail === "" ? "" : `<text x="14" y="${y + 16}" fill="${color}" font-size="9" font-weight="600" letter-spacing="0.8">${detail}</text>`}`;
+}
+
+function systemMetricLabel(metric: SystemMetricKind): string {
+	const labels: Record<SystemMetricKind, string> = {
+		cpu: "CPU",
+		gpu: "GPU",
+		memory: "RAM",
+		disk: "DISK",
+		network: "NETWORK",
+		"gpu-memory": "GPU MEM",
+		"gpu-power": "GPU POWER"
+	};
+	return labels[metric];
+}
+
+function formatDecimal(value: number): string {
+	const rounded = Math.round(value * 10) / 10;
+	return Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1);
 }
 
 /**
