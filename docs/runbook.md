@@ -119,6 +119,13 @@ There is no automated publish/deploy workflow. Build and link the local `.sdPlug
 
 **Fix:** Preserve the `.gitattributes` LF rule and convert the file before committing.
 
+### Windows Git shows unrelated line-ending changes
+
+**Cause:** `core.autocrlf=true` can rewrite existing repository text files while a feature is being staged.
+
+**Fix:** Set `git config core.autocrlf false` in the repository, then review with
+`git diff --ignore-space-at-eol` before committing.
+
 ## Sweep Trigger Policy
 
 Manual, by default: run `bash tools/sweep.sh` between features or after a harness change. CI runs `npm run check` and the generated package-output check on pushes to `main` and pull requests; harness validation and the full sweep remain manual maintenance operations.
