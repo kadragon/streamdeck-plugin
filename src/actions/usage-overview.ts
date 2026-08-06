@@ -198,8 +198,9 @@ export function isCurrentUsageOverviewRevision(currentRevision: number | undefin
 /**
  * Maps one face onto the custom layout's slots.
  *
- * Burn and reset views carry no percentage, so their bars are disabled rather than pinned to zero —
- * an empty bar would read as "0% used" instead of "not applicable".
+ * A row's bar is disabled rather than pinned to zero whenever the selected mode yields no
+ * percentage — the reset countdown, or a provider with no reading or no burn rate. An empty bar
+ * would read as "0% used" instead of "not applicable".
  */
 export function buildOverviewFeedback(face: UsageOverviewFace): FeedbackPayload {
 	return {

@@ -32,7 +32,7 @@
 		{
 			"key": "claude-detail",
 			"type": "text",
-			"rect": [4, 38, 62, 12],
+			"rect": [4, 40, 62, 12],
 			"alignment": "left",
 			"color": "#6B7076",
 			"font": { "size": 9, "weight": 600 },
@@ -71,7 +71,7 @@
 		{
 			"key": "codex-detail",
 			"type": "text",
-			"rect": [4, 76, 62, 12],
+			"rect": [4, 78, 62, 12],
 			"alignment": "left",
 			"color": "#6B7076",
 			"font": { "size": 9, "weight": 600 },

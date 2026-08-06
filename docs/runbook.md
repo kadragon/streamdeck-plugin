@@ -76,7 +76,9 @@ Add **Warp URI** for a validated `warp://` or `warppreview://` link such as `war
 - `npm run typecheck` exits 0.
 - `npm test` exits 0.
 - `npm run build` creates `com.kadragon.aiusage.sdPlugin/bin/plugin.js`.
-- `npm run check:package` exits 0 after the build and confirms the generated package entry point and metadata.
+- `npm run check:package` exits 0 after the build and confirms the generated package entry point and metadata,
+  and runs `streamdeck validate` over the package — the only check that rejects a custom encoder layout
+  whose item rects overlap, which would otherwise stop the dial from loading at runtime.
 - `streamdeck link` installs the package; press a configured key after the corresponding source has produced local data.
 
 ## Build and Check
@@ -87,7 +89,7 @@ Add **Warp URI** for a validated `warp://` or `warppreview://` link such as `war
 | `npm test` | Focused usage, metrics, and rendering tests |
 | `npm run build` | Rollup production bundle |
 | `npm run check:principles` | Golden-principle structural checks with agent-readable fixes |
-| `npm run check:package` | Manifest and generated Stream Deck package-output checks |
+| `npm run check:package` | Manifest, generated package output, and `streamdeck validate` (incl. custom layouts) |
 | `npm run check` | Typecheck, principle checks, and build |
 | `npm run watch` | Watch/rebuild and restart the linked plugin |
 | `streamdeck validate` | Remote Stream Deck package validation; requires network access |

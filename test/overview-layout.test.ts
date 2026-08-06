@@ -36,14 +36,25 @@ test("every feedback slot the dial writes exists in the custom layout", () => {
 });
 
 test("bars are disabled rather than zeroed when a mode carries no percentage", () => {
+	// Reset is the mode getOverviewMetric never attaches a percentage to; a provider with no burn
+	// rate is the other progress-less shape it emits.
 	const feedback = buildOverviewFeedback({
-		mode: "burn",
-		claude: { source: "claude", text: "3.1%/h", state: "ready" },
-		codex: { source: "codex", text: "--", state: "ready", detail: "no-burn" }
+		mode: "reset",
+		claude: { source: "claude", text: "3h 12m", state: "ready" },
+		codex: { source: "codex", text: "--", state: "ready", detail: "no-reset" }
 	});
 
 	assert.deepEqual(feedback["claude-bar"], { enabled: false, value: 0 });
 	assert.deepEqual(feedback["codex-bar"], { enabled: false, value: 0 });
+
+	// Burn does carry a percentage whenever a rate exists, so its bar stays enabled.
+	const burn = buildOverviewFeedback({
+		mode: "burn",
+		claude: { source: "claude", text: "3.1%/h", state: "ready", progress: 3.1 },
+		codex: { source: "codex", text: "--", state: "missing", detail: "no-burn" }
+	});
+	assert.equal((burn["claude-bar"] as { enabled: boolean }).enabled, true);
+	assert.deepEqual(burn["codex-bar"], { enabled: false, value: 0 });
 
 	const used = buildOverviewFeedback({
 		mode: "used",
