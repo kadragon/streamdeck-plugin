@@ -6,6 +6,13 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -16,11 +23,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Typecheck, principle check, and build
+      - name: Run product quality checks
         run: npm run check
-      - name: Validate harness
-        run: bash scripts/validate-harness.sh .
-      - name: Run quick sweep
-        run: bash tools/sweep.sh --quick
+      - name: Validate generated package
+        run: npm run check:package
