@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+	<head lang="en">
+		<meta charset="utf-8" />
+		<!-- Vendored (sdpi-components v4.0.1) so the inspector works offline and pins the exact version. -->
+		<script src="sdpi-components.js"></script>
+	</head>
+	<body>
+		<sdpi-item label="Warp URI">
+			<sdpi-textfield
+				setting="uri"
+				placeholder="warp://action/new_tab"
+			></sdpi-textfield>
+		</sdpi-item>
+		<p class="sdpi-info">
+			Enter a Warp or Warp Preview URI, such as warp://action/new_tab, warp://launch/&lt;config&gt;,
+			or warp://settings. Only the warp:// and warppreview:// schemes are accepted.
+		</p>
+	</body>
+</html>

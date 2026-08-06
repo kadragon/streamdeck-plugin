@@ -15,6 +15,7 @@
 
 ```bash
 npm install
+npm test
 npm run check
 streamdeck link com.kadragon.aiusage.sdPlugin
 ```
@@ -29,13 +30,15 @@ The wrapper writes `~/.claude/ai-usage/claude.json` and `claude-history.jsonl`, 
 
 ### System Monitor
 
-The **System Monitor** action is Windows-only. Choose CPU or GPU in its Property Inspector; the key shows
-only the selected utilization percentage, while the background color represents that metric's temperature.
-CPU utilization and high-precision thermal-zone temperature come from PowerShell `Get-Counter`; NVIDIA
-GPU utilization and temperature come from the first row of:
+The **System Monitor** action is Windows-only and is hidden on macOS. Choose CPU, GPU, RAM, disk, network,
+GPU memory, or GPU power in its Property Inspector. GPU metrics use the selected NVIDIA GPU index. CPU
+and GPU temperatures tint the key background; the other metrics use a neutral metric background.
+CPU utilization and high-precision thermal-zone temperature come from PowerShell `Get-Counter`; RAM,
+disk, and network values come from local Windows sources. NVIDIA utilization, temperature, memory, and
+power come from:
 
 ```text
-nvidia-smi.exe --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits
+nvidia-smi.exe --query-gpu=index,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw --format=csv,noheader,nounits
 ```
 
 The key refreshes immediately when it appears, every five seconds while visible, and again after
@@ -48,15 +51,27 @@ invalid, that field shows `--` rather than zero. The key background is green bel
 Add the **Warp Tab Config** action, choose one saved config in its Property Inspector, and press the key
 to open that config as a new Warp tab. The selector reads local `.toml` files from Warp's `tab_configs`
 directory and uses the filename stem for the Warp URI. Use the selector's refresh button after adding or
-renaming a config.
+renaming a config. Every key press opens the selected config as a new tab in the active Warp window.
 
 On Windows, the stable directory is `%APPDATA%\\warp\\Warp\\data\\tab_configs\\`; macOS uses
 `~/.warp/tab_configs/`; Linux uses `${XDG_DATA_HOME:-$HOME/.local/share}/warp-terminal/tab_configs/`.
 Preview configs are listed when present and use Warp's `warppreview://` URI scheme.
 
+### AI Usage Overview
+
+Add **AI Usage Overview** to show Claude Code and Codex CLI together. Choose used percentage, remaining
+percentage, burn rate, or reset countdown in the Property Inspector. Press the key, or push its dial,
+to cycle modes. Missing and stale readings remain visibly distinct from zero.
+
+### Warp URI
+
+Add **Warp URI** for a validated `warp://` or `warppreview://` link such as `warp://action/new_tab`,
+`warp://launch/<config>`, or `warp://settings`. The plugin rejects every other URI scheme.
+
 ### Verify
 
 - `npm run typecheck` exits 0.
+- `npm test` exits 0.
 - `npm run build` creates `com.kadragon.aiusage.sdPlugin/bin/plugin.js`.
 - `npm run check:package` exits 0 after the build and confirms the generated package entry point and metadata.
 - `streamdeck link` installs the package; press a configured key after the corresponding source has produced local data.
@@ -66,6 +81,7 @@ Preview configs are listed when present and use Warp's `warppreview://` URI sche
 | Command | Purpose |
 |---------|---------|
 | `npm run typecheck` | TypeScript check without emitting |
+| `npm test` | Focused usage, metrics, and rendering tests |
 | `npm run build` | Rollup production bundle |
 | `npm run check:principles` | Golden-principle structural checks with agent-readable fixes |
 | `npm run check:package` | Manifest and generated Stream Deck package-output checks |
@@ -75,7 +91,9 @@ Preview configs are listed when present and use Warp's `warppreview://` URI sche
 
 ## Tests
 
-There is no product test suite yet. Treat `npm run typecheck`, `npm run check:principles`, the build, and the manual source/packaging checks in `docs/eval-criteria.md` as the current verification contract. Add focused tests before changing reader or burn-rate behavior.
+The product test suite uses Node's test runner through `tsx`. It covers reader validation, reset-aware
+burn rate, overview modes, local metric parsing/sampling, and no-data rendering. Run `npm test` before
+changing reader or burn-rate behavior.
 
 ## Harness Operations
 

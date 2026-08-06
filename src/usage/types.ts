@@ -11,6 +11,61 @@ export type UsageSample = {
 	usedPercent: number;
 };
 
+export const MIN_USAGE_PERCENT = 0;
+export const MAX_USAGE_PERCENT = 100;
+
+/** Returns true only for a percentage that can safely be shown as quota usage. */
+export function isUsagePercent(value: unknown): value is number {
+	return typeof value === "number" && Number.isFinite(value) && value >= MIN_USAGE_PERCENT && value <= MAX_USAGE_PERCENT;
+}
+
+/** Parses a source timestamp without inventing a current time for malformed input. */
+export function parseUsageTimestamp(value: unknown): Date | undefined {
+	if (value instanceof Date) {
+		return isUsableDate(value) ? new Date(value.getTime()) : undefined;
+	}
+
+	if ((typeof value !== "number" && typeof value !== "string") || (typeof value === "string" && value.trim() === "")) {
+		return undefined;
+	}
+
+	const parsed = new Date(value);
+	return isUsableDate(parsed) ? parsed : undefined;
+}
+
+/** Parses a reset timestamp, whose numeric source representation is epoch seconds. */
+export function parseResetTimestamp(value: unknown): Date | undefined {
+	if (typeof value === "number") {
+		if (!Number.isFinite(value)) {
+			return undefined;
+		}
+
+		const parsed = new Date(value * 1000);
+		return isUsableDate(parsed) ? parsed : undefined;
+	}
+
+	return parseUsageTimestamp(value);
+}
+
+export function isUsableDate(value: unknown): value is Date {
+	return value instanceof Date && Number.isFinite(value.getTime());
+}
+
+/** Keeps invalid samples out of burn-rate history even when a caller supplies an untrusted object. */
+export function normalizeUsageSample(value: unknown): UsageSample | undefined {
+	if (typeof value !== "object" || value === null) {
+		return undefined;
+	}
+
+	const sample = value as { at?: unknown; usedPercent?: unknown };
+	const at = parseUsageTimestamp(sample.at);
+	if (at === undefined || !isUsagePercent(sample.usedPercent)) {
+		return undefined;
+	}
+
+	return { at, usedPercent: sample.usedPercent };
+}
+
 /**
  * A weekly rate-limit reading, as last observed by the source tool itself.
  *

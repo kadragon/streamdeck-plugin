@@ -6,26 +6,33 @@ is read from local files or native local commands; the plugin never calls an API
 | Action | What the key does |
 | --- | --- |
 | **Weekly Limit** | Shows how much of the weekly rate-limit allowance Claude Code or Codex CLI has consumed |
-| **System Monitor** | Shows local Windows CPU and NVIDIA GPU utilization and temperatures on one key |
+| **AI Usage Overview** | Shows Claude Code and Codex CLI usage together, with used, remaining, burn-rate, and reset views |
+| **System Monitor** | Shows local Windows CPU, RAM, disk, network, NVIDIA GPU, memory, and power metrics |
 | **Warp Tab Config** | Opens one of Warp's saved Tab Configs |
+| **Warp URI** | Opens a validated Warp or Warp Preview URI |
 
 ## System Monitor (Windows)
 
-The **System Monitor** action is Windows-only. Choose **CPU** or **GPU** in the action's Property
-Inspector. The key then shows only the selected utilization percentage; its background color represents
-that metric's temperature. It reads CPU utilization from the Windows performance
-counter `\Processor(_Total)\% Processor Time` and CPU thermal-zone data from
-`\Thermal Zone Information(*)\High Precision Temperature` through PowerShell `Get-Counter`. It reads the first NVIDIA
-GPU with:
+The **System Monitor** action is Windows-only and hidden on macOS. Choose CPU, GPU, RAM, disk, network,
+GPU memory, or GPU power in the action's Property Inspector. GPU metrics use the selected NVIDIA GPU
+index. CPU and GPU temperatures tint the background; unavailable readings show `--` rather than zero.
+It reads CPU utilization and thermal-zone data through PowerShell `Get-Counter`, and reads local RAM,
+disk, and network values without an API. NVIDIA metrics come from:
 
 ```text
-nvidia-smi.exe --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits
+nvidia-smi.exe --query-gpu=index,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw --format=csv,noheader,nounits
 ```
 
 The NVIDIA driver must provide `nvidia-smi.exe` on PATH. The key refreshes every five seconds and
 refreshes again after system wake. Missing counters, an unavailable `nvidia-smi.exe`, and invalid
 readings show `--`; they are never displayed as zero. Available temperatures tint the background green
 below 60 C, amber from 60 through 79.9 C, and red at 80 C or higher.
+
+## AI Usage Overview
+
+The **AI Usage Overview** action shows Claude Code and Codex CLI on one key. Its view can be set to
+used percentage, remaining percentage, recent burn rate, or reset countdown. Press the key, or push
+the dial on Stream Deck+, to cycle between views. It uses the same local files as **Weekly Limit**.
 
 ## Weekly Limit — where the numbers come from
 
@@ -110,10 +117,16 @@ Keys also refresh automatically when the machine wakes from sleep (`onSystemDidW
 is read while it is asleep.
 
 ## Launch a Warp Tab Config
-## Launch a Warp Tab Config
 
 The **Warp Tab Config** action opens one of Warp's saved `.toml` Tab Configs from a Stream Deck key.
 Choose the config in the action's Property Inspector; the list is read from Warp's local
 `tab_configs` directory and can be refreshed after config files change. The key opens the selected config
 through Warp's `warp://tab_config/<filename>` URI scheme, so the configured directory, shell, panes, and
-startup commands remain owned by Warp.
+startup commands remain owned by Warp. Each key press opens the selected config as a new tab in the active
+Warp window.
+
+## Launch a Warp URI
+
+The **Warp URI** action accepts `warp://` and `warppreview://` links such as
+`warp://action/new_tab`, `warp://launch/<config>`, and `warp://settings`. All other URI schemes are
+rejected before the native URI handler is called.

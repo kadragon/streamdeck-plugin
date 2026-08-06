@@ -2,7 +2,14 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { NoUsageDataError, type UsageReading, type UsageSample } from "./types";
+import {
+	NoUsageDataError,
+	parseResetTimestamp,
+	parseUsageTimestamp,
+	isUsagePercent,
+	type UsageReading,
+	type UsageSample
+} from "./types";
 
 /**
  * Directory holding the files written by `scripts/statusline-usage-snapshot.sh`.
@@ -42,20 +49,20 @@ export async function readClaudeUsage(dir = DEFAULT_CLAUDE_DIR): Promise<UsageRe
 	}
 
 	const weekly = snapshot?.seven_day;
-	if (typeof weekly?.used_percentage !== "number" || !Number.isFinite(weekly.used_percentage)) {
+	if (!isUsagePercent(weekly?.used_percentage)) {
 		throw new NoUsageDataError("snapshot has no seven_day.used_percentage");
 	}
 
 	// Without a timestamp the reading cannot be judged fresh, and dating it to the epoch would render a
 	// twenty-thousand-day "ago" caption. No usable time means no usable reading.
-	const observedAt = new Date(snapshot?.updated_at ?? NaN);
-	if (Number.isNaN(observedAt.getTime())) {
+	const observedAt = parseUsageTimestamp(snapshot?.updated_at);
+	if (observedAt === undefined) {
 		throw new NoUsageDataError("snapshot has no usable updated_at");
 	}
 
 	return {
 		usedPercent: weekly.used_percentage,
-		resetsAt: toDate(weekly.resets_at),
+		resetsAt: parseResetTimestamp(weekly.resets_at),
 		observedAt,
 		history: await readHistory(path.join(dir, HISTORY_FILE))
 	};
@@ -82,10 +89,10 @@ async function readHistory(historyPath: string): Promise<UsageSample[]> {
 
 			try {
 				const record = JSON.parse(line);
-				const at = new Date(record?.updated_at ?? NaN);
+				const at = parseUsageTimestamp(record?.updated_at);
 				const usedPercent = record?.seven_day?.used_percentage;
 
-				if (typeof usedPercent !== "number" || Number.isNaN(at.getTime())) {
+				if (!isUsagePercent(usedPercent) || at === undefined) {
 					return [];
 				}
 
@@ -94,21 +101,4 @@ async function readHistory(historyPath: string): Promise<UsageSample[]> {
 				return [];
 			}
 		});
-}
-
-/**
- * Parses a `resets_at`, which Claude Code reports as epoch seconds but which older snapshots may hold
- * as an ISO-8601 string.
- */
-function toDate(value: unknown): Date | undefined {
-	if (typeof value === "number") {
-		return new Date(value * 1000);
-	}
-
-	if (typeof value === "string") {
-		const parsed = new Date(value);
-		return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-	}
-
-	return undefined;
 }

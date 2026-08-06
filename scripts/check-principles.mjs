@@ -60,28 +60,28 @@ for (const relativePath of sourceFiles) {
 
 requireText(
 	"src/usage/claude.ts",
-	/Number\.isFinite\(weekly\.used_percentage\)/,
+	/(Number\.isFinite\(weekly\.used_percentage\)|isUsagePercent\(weekly\?\.used_percentage\))/,
 	"Claude reader does not guard used_percentage with Number.isFinite",
 	"Reject null, NaN, and Infinity before constructing UsageReading.",
 	"docs/conventions.md"
 );
 requireText(
 	"src/usage/claude.ts",
-	/Number\.isNaN\(observedAt\.getTime\(\)\)/,
+	/(Number\.isNaN\(observedAt\.getTime\(\)\)|parseUsageTimestamp\(snapshot\?\.updated_at\))/,
 	"Claude reader does not reject an unusable observedAt timestamp",
 	"Drop readings without a usable source timestamp instead of defaulting to epoch or now.",
 	"docs/conventions.md"
 );
 requireText(
 	"src/usage/codex.ts",
-	/Number\.isFinite\(weekly\.used_percent\)/,
+	/(Number\.isFinite\(weekly\.used_percent\)|isUsagePercent\(weekly\?\.used_percent\))/,
 	"Codex reader does not guard used_percent with Number.isFinite",
 	"Reject null, NaN, and Infinity before constructing UsageReading.",
 	"docs/conventions.md"
 );
 requireText(
 	"src/usage/codex.ts",
-	/Number\.isNaN\(at\.getTime\(\)\)/,
+	/(Number\.isNaN\(at\.getTime\(\)\)|parseUsageTimestamp\(record\?\.timestamp\))/,
 	"Codex reader does not reject an unusable observation timestamp",
 	"Drop observations without a usable timestamp; never date them to now.",
 	"docs/conventions.md"

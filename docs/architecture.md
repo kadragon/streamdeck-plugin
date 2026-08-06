@@ -16,13 +16,18 @@
 ```text
 src/plugin.ts                  # SDK registration and wake-up refresh
 src/actions/weekly-limit.ts    # Settings, lifecycle, ticker, source selection
+src/actions/usage-overview.ts  # Combined Claude/Codex usage modes and encoder feedback
 src/actions/system-metrics.ts  # Windows-only lifecycle, five-second ticker, wake refresh
 src/actions/warp-tab-config.ts # Dynamic Tab Config selection and URI launch
+src/actions/warp-uri.ts        # Validated Warp and Warp Preview URI launcher
 src/render.ts                  # Pure SVG key-face rendering and time formatting
 src/metrics/windows.ts         # Local PowerShell/Get-Counter and nvidia-smi reader
+src/metrics/types.ts           # Supported local system metric names
 src/warp/                       # Local Warp Tab Config discovery and URI normalization
+src/warp/uris.ts                # Validated custom-URI opening across platforms
 src/usage/types.ts             # Reading/sample contracts and no-data error
 src/usage/burn-rate.ts         # Reset-aware burn-rate projection
+src/usage/overview.ts          # Combined usage display-mode calculations
 src/usage/claude.ts            # Claude snapshot/history file reader
 src/usage/codex.ts             # Codex rollout file reader and cache
 scripts/statusline-usage-snapshot.sh
@@ -30,8 +35,10 @@ scripts/statusline-usage-snapshot.sh
 com.kadragon.aiusage.sdPlugin/
   manifest.json                # Stream Deck package contract
   ui/weekly-limit.html         # Property Inspector settings
-  ui/system-monitor.html       # CPU/GPU metric selector
-  ui/warp-tab-config.html      # Warp Tab Config selector
+  ui/system-monitor.html       # Local system metric selector
+	  ui/warp-tab-config.html      # Warp Tab Config selector
+	  ui/usage-overview.html       # Combined usage settings
+	  ui/warp-uri.html             # Warp URI setting
   imgs/                        # Checked-in package artwork
   bin/                         # Generated build output; do not edit
 ```
@@ -51,15 +58,19 @@ plugin -> actions -> render
 ### Boundaries
 
 - `WeeklyLimit` is the only action-level coordinator for settings, refresh cadence, and key updates.
-- `SystemMonitor` is the Windows-only action-level coordinator for metric refresh and key updates.
+- `UsageOverview` coordinates both local usage readers and keeps mode changes in action settings.
+- `SystemMonitor` is the Windows-only action-level coordinator for metric refresh and key/encoder updates.
 - `WarpTabConfig` reads local Tab Config metadata for its Property Inspector and opens only validated
   `warp://tab_config/` or `warppreview://tab_config/` URIs on key press.
+- `WarpUriLauncher` opens only validated `warp://` or `warppreview://` values supplied by the user.
 - Usage readers return `UsageReading`; invalid or missing local data becomes `NoUsageDataError`.
 - `renderKey` accepts a `KeyFace` and returns an SVG data URI; user-controlled caption text is escaped.
 - The Property Inspector sends settings through Stream Deck events; the ticker uses the latest event payload rather than polling IPC.
-- `SystemMonitor` refreshes visible keys every five seconds and exposes a `refreshAll` hook for wake-up refreshes.
-- The System Monitor Property Inspector supplies the selected CPU/GPU metric through settings events; the ticker uses the latest event payload.
+- `SystemMonitor` refreshes visible keys and encoders every five seconds, shares one local metrics sample
+  across all visible instances, and exposes a forced `refreshAll` hook for wake-up refreshes.
+- The System Monitor Property Inspector supplies the selected metric and GPU index through settings events; the ticker uses the latest event payload.
 - `readWindowsMetrics` rejects non-Windows hosts and keeps missing or invalid metric fields undefined.
+- System Monitor action metadata is Windows-only even though the package also supports macOS for other actions.
 
 ## Data Access
 
@@ -69,12 +80,12 @@ Warp Tab Config discovery also stays local. The action scans Warp's platform-spe
 directory for `.toml` files, uses the filename stem as the launch identity, and reads only the optional
 top-level `name` for the Property Inspector label. It does not parse or execute config commands itself.
 
-The System Monitor data path is Windows-only. CPU values come from `\Processor(_Total)\% Processor Time`
-and `\Thermal Zone Information(*)\High Precision Temperature` through PowerShell `Get-Counter`; thermal-zone values are
-converted from tenths of Kelvin to Celsius. GPU values come from the first row of
-`nvidia-smi.exe --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits`. The NVIDIA
-driver's `nvidia-smi.exe` must be available on PATH. Missing counters, a missing NVIDIA utility, and
-invalid ranges leave only the affected fields unavailable.
+The System Monitor data path is Windows-only. CPU utilization and thermal-zone temperature come from
+PowerShell `Get-Counter`; RAM and disk usage come from local CIM data; network throughput comes from
+the local network performance counter. NVIDIA utilization, temperature, memory, and power come from
+`nvidia-smi.exe`, with the selected GPU index retained in settings. The NVIDIA driver's utility must be
+available on PATH. Missing counters, a missing NVIDIA utility, and invalid ranges leave only the affected
+fields unavailable.
 
 ## Key Abstractions
 

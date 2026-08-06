@@ -1,4 +1,4 @@
-import type { UsageReading, UsageSample } from "./types";
+import { isUsagePercent, isUsableDate, normalizeUsageSample, type UsageReading, type UsageSample } from "./types";
 
 /** Two observations closer together than this say little about the trend, so they are not used. */
 const MIN_SPAN_MS = 10 * 60 * 1000;
@@ -22,6 +22,10 @@ export type BurnProjection = {
  * rolled over, and averaging across that boundary would understate the current rate.
  */
 export function projectExhaustion(reading: UsageReading, now: Date): BurnProjection | undefined {
+	if (!isUsableDate(now) || !isUsableDate(reading.observedAt) || !isUsagePercent(reading.usedPercent)) {
+		return undefined;
+	}
+
 	const samples = currentWindowSamples([...reading.history, { at: reading.observedAt, usedPercent: reading.usedPercent }]);
 	if (samples.length < 2) {
 		return undefined;
@@ -32,7 +36,7 @@ export function projectExhaustion(reading: UsageReading, now: Date): BurnProject
 	const spanMs = last.at.getTime() - first.at.getTime();
 	const rise = last.usedPercent - first.usedPercent;
 
-	if (spanMs < MIN_SPAN_MS || rise < MIN_RISE_PERCENT) {
+	if (!Number.isFinite(spanMs) || spanMs < MIN_SPAN_MS || !Number.isFinite(rise) || rise < MIN_RISE_PERCENT) {
 		return undefined;
 	}
 
@@ -49,7 +53,12 @@ export function projectExhaustion(reading: UsageReading, now: Date): BurnProject
  * Keeps only the trailing run of samples that never decreases, i.e. everything since the last reset.
  */
 export function currentWindowSamples(samples: UsageSample[]): UsageSample[] {
-	const sorted = [...samples].sort((a, b) => a.at.getTime() - b.at.getTime());
+	const sorted = samples
+		.flatMap((sample) => {
+			const normalized = normalizeUsageSample(sample);
+			return normalized === undefined ? [] : [normalized];
+		})
+		.sort((a, b) => a.at.getTime() - b.at.getTime());
 
 	let start = 0;
 	for (let i = 1; i < sorted.length; i++) {

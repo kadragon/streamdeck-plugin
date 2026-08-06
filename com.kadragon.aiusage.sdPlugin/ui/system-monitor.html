@@ -8,13 +8,25 @@
 	<body>
 		<sdpi-item label="Metric">
 			<sdpi-select setting="metric" default="cpu">
-				<option value="cpu">CPU</option>
-				<option value="gpu">GPU</option>
+				<option value="cpu">CPU utilization</option>
+				<option value="gpu">GPU utilization</option>
+				<option value="memory">RAM usage</option>
+				<option value="disk">Disk usage</option>
+				<option value="network">Network throughput</option>
+				<option value="gpu-memory">GPU memory</option>
+				<option value="gpu-power">GPU power</option>
 			</sdpi-select>
 		</sdpi-item>
+		<sdpi-item label="GPU index">
+			<sdpi-range setting="gpuIndex" default="0" min="0" max="8" step="1" showlabels>
+				<span slot="min">0</span>
+				<span slot="max">8</span>
+			</sdpi-range>
+		</sdpi-item>
 		<p class="sdpi-info">
-			The key shows utilization as a percentage. Temperature is represented by the background color:
-			green below 60 C, amber from 60 through 79.9 C, and red at 80 C or higher.
+			Choose a local Windows metric. GPU metrics use the selected NVIDIA GPU index. CPU and GPU
+			temperatures are represented by the background color: green below 60 C, amber from 60 through
+			79.9 C, and red at 80 C or higher. Network is shown in Mbps.
 		</p>
 	</body>
 </html>

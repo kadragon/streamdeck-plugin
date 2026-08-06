@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { currentWindowSamples } from "./burn-rate";
-import { NoUsageDataError, type UsageReading } from "./types";
+import { NoUsageDataError, isUsagePercent, parseResetTimestamp, parseUsageTimestamp, type UsageReading } from "./types";
 
 /** Number of minutes in the weekly rate-limit window Codex reports. */
 const WEEKLY_WINDOW_MINUTES = 10080;
@@ -203,20 +203,20 @@ function toObservation(line: string): Observation | undefined {
 	const weekly = pickWeeklyWindow(limits);
 	// A `null` percentage would otherwise pass an `=== undefined` guard and render as 0% — the one
 	// misreport a quota gauge must never make.
-	if (typeof weekly?.used_percent !== "number" || !Number.isFinite(weekly.used_percent)) {
+	if (!isUsagePercent(weekly?.used_percent)) {
 		return undefined;
 	}
 
 	// An observation with no usable time cannot be judged fresh and would enter the burn rate as a
 	// same-instant sample, so it is dropped rather than dated to now.
-	const at = new Date(record?.timestamp ?? NaN);
-	if (Number.isNaN(at.getTime())) {
+	const at = parseUsageTimestamp(record?.timestamp);
+	if (at === undefined) {
 		return undefined;
 	}
 
 	return {
 		usedPercent: weekly.used_percent,
-		resetsAt: typeof weekly.resets_at === "number" ? new Date(weekly.resets_at * 1000) : undefined,
+		resetsAt: parseResetTimestamp(weekly.resets_at),
 		at
 	};
 }
