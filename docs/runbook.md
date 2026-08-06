@@ -32,10 +32,12 @@ The wrapper writes `~/.claude/ai-usage/claude.json` and `claude-history.jsonl`, 
 
 The **System Monitor** action is Windows-only and is hidden on macOS. Choose CPU, GPU, RAM, disk, network,
 GPU memory, or GPU power in its Property Inspector. GPU metrics use the selected NVIDIA GPU index. The
-system ACPI thermal zone (shown on the CPU key) and the GPU temperature tint the key background; the
+CPU temperature (shown on the CPU key) and the GPU temperature tint the key background; the
 other metrics use a neutral metric background. CPU utilization, RAM, disk, and network values come from
-locale-independent CIM performance classes; the thermal zone comes from `MSAcpi_ThermalZoneTemperature`
-with a `Get-Counter` fallback and is a chassis sensor rather than the CPU package. NVIDIA utilization, temperature, memory, and
+locale-independent CIM performance classes. CPU temperature prefers the true package sensor published by
+LibreHardwareMonitor or OpenHardwareMonitor over WMI; with neither running it falls back to
+`MSAcpi_ThermalZoneTemperature` (plus a `Get-Counter` fallback), which is a chassis sensor rather than
+the CPU package. Neither monitor is bundled — install and run one to get the package reading. NVIDIA utilization, temperature, memory, and
 power come from:
 
 ```text

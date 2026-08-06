@@ -6,6 +6,7 @@ import {
 	type DialDownEvent,
 	type DialUpEvent,
 	type DidReceiveSettingsEvent,
+	type FeedbackPayload,
 	type KeyAction,
 	type KeyDownEvent,
 	type TouchTapEvent,
@@ -18,11 +19,14 @@ import { readClaudeUsage } from "../usage/claude";
 import { readCodexUsage } from "../usage/codex";
 import { getOverviewMetric, nextUsageOverviewMode, normalizeUsageOverviewMode, type OverviewProvider, type UsageOverviewMode } from "../usage/overview";
 import { NoUsageDataError, type UsageReading, type UsageSource } from "../usage/types";
-import { renderUsageOverview, type UsageOverviewFace, type UsageOverviewProviderFace } from "../render";
+import { overviewBrandAccent, overviewDetailLabel, overviewStateColor, renderUsageOverview, type UsageOverviewFace, type UsageOverviewProviderFace } from "../render";
 
 const DEFAULT_REFRESH_SECONDS = 60;
 const DEFAULT_ALERT_PERCENT = 90;
 const PROVIDER_CACHE_TTL_MS = 5_000;
+
+/** Custom Stream Deck+ layout, relative to the plugin folder; gives each provider its own slots. */
+export const USAGE_OVERVIEW_LAYOUT = "layouts/usage-overview.json";
 
 export type UsageOverviewSettings = {
 	mode?: UsageOverviewMode;
@@ -147,13 +151,8 @@ export class UsageOverview extends SingletonAction<UsageOverviewSettings> {
 				return;
 			}
 
-			// $C1 carries no value slot, so the figures ride in the title; burn/reset have no progress.
-			await target.setFeedbackLayout("$C1");
-			await target.setFeedback({
-				title: `${mode.toUpperCase()} C ${face.claude.text} | X ${face.codex.text}`,
-				indicator1: { value: face.claude.progress ?? 0 },
-				indicator2: { value: face.codex.progress ?? 0 }
-			});
+			await target.setFeedbackLayout(USAGE_OVERVIEW_LAYOUT);
+			await target.setFeedback(buildOverviewFeedback(face));
 		} catch (err) {
 			streamDeck.logger.error("failed to render usage overview", err);
 		}
@@ -194,6 +193,33 @@ export class UsageOverview extends SingletonAction<UsageOverviewSettings> {
 /** Prevents an older asynchronous refresh from overwriting a newer mode selection. */
 export function isCurrentUsageOverviewRevision(currentRevision: number | undefined, renderRevision: number): boolean {
 	return currentRevision === renderRevision;
+}
+
+/**
+ * Maps one face onto the custom layout's slots.
+ *
+ * Burn and reset views carry no percentage, so their bars are disabled rather than pinned to zero —
+ * an empty bar would read as "0% used" instead of "not applicable".
+ */
+export function buildOverviewFeedback(face: UsageOverviewFace): FeedbackPayload {
+	return {
+		mode: `AI USAGE / ${face.mode.toUpperCase()}`,
+		...overviewRowFeedback("claude", face.claude),
+		...overviewRowFeedback("codex", face.codex)
+	};
+}
+
+function overviewRowFeedback(slot: "claude" | "codex", provider: UsageOverviewProviderFace): FeedbackPayload {
+	const color = overviewStateColor(provider);
+	const detail = overviewDetailLabel(provider);
+	return {
+		[`${slot}-label`]: { value: provider.source.toUpperCase(), color: overviewBrandAccent(provider.source) },
+		[`${slot}-value`]: { value: provider.text, color },
+		[`${slot}-detail`]: { value: detail, color },
+		[`${slot}-bar`]: provider.progress === undefined
+			? { enabled: false, value: 0 }
+			: { enabled: true, value: provider.progress, bar_fill_c: color }
+	};
 }
 
 function toFace(provider: OverviewProvider, mode: UsageOverviewMode, now: Date, alertPercent: number): UsageOverviewProviderFace {

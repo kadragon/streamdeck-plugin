@@ -82,8 +82,10 @@ top-level `name` for the Property Inspector label. It does not parse or execute 
 
 The System Monitor data path is Windows-only. CPU utilization, RAM, disk usage, and network throughput
 come from local CIM classes (`Win32_PerfFormattedData_*`, `Win32_OperatingSystem`, `Win32_LogicalDisk`),
-chosen over `Get-Counter` paths because counter names are localized; the ACPI thermal zone comes from
-`MSAcpi_ThermalZoneTemperature` with a `Get-Counter` fallback. NVIDIA utilization, temperature, memory, and power come from
+chosen over `Get-Counter` paths because counter names are localized. CPU temperature is read as a chain:
+the real package sensor from the `root/LibreHardwareMonitor` (then `root/OpenHardwareMonitor`) `Sensor`
+class when either provider is running, otherwise the ACPI chassis zone from `MSAcpi_ThermalZoneTemperature`
+with a `Get-Counter` fallback. NVIDIA utilization, temperature, memory, and power come from
 `nvidia-smi.exe`, with the selected GPU index retained in settings. The NVIDIA driver's utility must be
 available on PATH. Missing counters, a missing NVIDIA utility, and invalid ranges leave only the affected
 fields unavailable.

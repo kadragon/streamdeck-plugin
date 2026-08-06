@@ -24,10 +24,11 @@
 			</sdpi-range>
 		</sdpi-item>
 		<p class="sdpi-info">
-			Choose a local Windows metric. GPU metrics use the selected NVIDIA GPU index. The system
-			thermal zone (on the CPU key) and the GPU temperature are represented by the background
-			color: green below 60 C, amber from 60 through 79.9 C, and red at 80 C or higher. The
-			thermal zone is a chassis sensor, not the CPU package. Network is shown in Mbps.
+			Choose a local Windows metric. GPU metrics use the selected NVIDIA GPU index. The CPU and
+			GPU temperatures are represented by the background color: green below 60 C, amber from 60
+			through 79.9 C, and red at 80 C or higher. The CPU key shows the true package temperature
+			while LibreHardwareMonitor or OpenHardwareMonitor is running; otherwise it falls back to
+			the ACPI thermal zone, which is a chassis sensor. Network is shown in Mbps.
 		</p>
 	</body>
 </html>

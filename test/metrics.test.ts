@@ -26,6 +26,29 @@ test("Windows metric parsers validate optional fields and calculate GPU memory u
 	assert.equal(selectSystemMetric({ ...computer, gpus }, "gpu-power", 0).value, 120);
 });
 
+test("CPU temperature prefers the LibreHardwareMonitor package sensor over the ACPI thermal zone", () => {
+	const withPackage = parsePowerShellMetrics(JSON.stringify({
+		cpuUsagePercent: 20,
+		cpuPackageTemperatureC: 78.5,
+		cpuTemperatureRaw: 3331.5
+	}));
+	assert.equal(withPackage.cpuPackageTemperatureC, 78.5);
+	assert.equal(Math.round(withPackage.systemTemperatureC ?? 0), 60);
+	assert.equal(selectSystemMetric({ ...withPackage, gpus: [] }, "cpu", 0).temperatureC, 78.5);
+
+	// LibreHardwareMonitor not running: the chassis zone remains the stand-in.
+	const withoutPackage = parsePowerShellMetrics(JSON.stringify({ cpuUsagePercent: 20, cpuTemperatureRaw: 3331.5 }));
+	assert.equal(withoutPackage.cpuPackageTemperatureC, undefined);
+	assert.equal(Math.round(selectSystemMetric({ ...withoutPackage, gpus: [] }, "cpu", 0).temperatureC ?? 0), 60);
+
+	// An unusable package reading must not shadow the fallback.
+	for (const bogus of [null, "n/a", Number.NaN, 4_000, -300]) {
+		const rejected = parsePowerShellMetrics(JSON.stringify({ cpuPackageTemperatureC: bogus, cpuTemperatureRaw: 3331.5 }));
+		assert.equal(rejected.cpuPackageTemperatureC, undefined);
+		assert.equal(Math.round(selectSystemMetric({ ...rejected, gpus: [] }, "cpu", 0).temperatureC ?? 0), 60);
+	}
+});
+
 test("system metric formatting and progress handle network units and unavailable values", () => {
 	assert.equal(formatSystemMetric("network", 12.34), "12.3 Mbps");
 	assert.equal(formatSystemMetric("network", undefined), "--");
