@@ -46,8 +46,14 @@ nvidia-smi.exe --query-gpu=index,utilization.gpu,temperature.gpu,memory.used,mem
 
 The key refreshes immediately when it appears, every fifteen seconds while visible, and again after
 system wake. If PowerShell counters, `nvidia-smi.exe`, or an individual reading is unavailable or
-invalid, that field shows `--` rather than zero. The key background is green below 60 C, amber from
-60 through 79.9 C, and red at 80 C or higher.
+invalid, that field shows `--` rather than zero. A gauge under the value shows how full the metric is;
+a missing reading draws no fill at all, so it can never be read as a low value. On CPU and GPU the
+measured temperature is shown as a value and also tints the key background: green below 60 C, amber
+from 60 through 79.9 C, and red at 80 C or higher. A GPU index other than 0 is named in the header.
+
+On Stream Deck+, the action uses its own dial layout: turn the dial to change the displayed metric
+(two detents per step, wrapping in both directions, persisted to the action's settings), and push the
+dial or tap the touch strip to take a fresh reading immediately instead of waiting out the interval.
 
 ### Warp Tab Config launcher
 
@@ -59,17 +65,6 @@ renaming a config. Every key press opens the selected config as a new tab in the
 On Windows, the stable directory is `%APPDATA%\\warp\\Warp\\data\\tab_configs\\`; macOS uses
 `~/.warp/tab_configs/`; Linux uses `${XDG_DATA_HOME:-$HOME/.local/share}/warp-terminal/tab_configs/`.
 Preview configs are listed when present and use Warp's `warppreview://` URI scheme.
-
-### AI Usage Overview
-
-Add **AI Usage Overview** to show Claude Code and Codex CLI together. Choose used percentage, remaining
-percentage, burn rate, or reset countdown in the Property Inspector. Press the key, or push its dial,
-to cycle modes. Missing and stale readings remain visibly distinct from zero.
-
-### Warp URI
-
-Add **Warp URI** for a validated `warp://` or `warppreview://` link such as `warp://action/new_tab`,
-`warp://launch/<config>`, or `warp://settings`. The plugin rejects every other URI scheme.
 
 ### Verify
 
@@ -97,7 +92,7 @@ Add **Warp URI** for a validated `warp://` or `warppreview://` link such as `war
 ## Tests
 
 The product test suite uses Node's test runner through `tsx`. It covers reader validation, reset-aware
-burn rate, overview modes, local metric parsing/sampling, and no-data rendering. Run `npm test` before
+burn rate, local metric parsing/sampling, and no-data rendering. Run `npm test` before
 changing reader or burn-rate behavior.
 
 ## Harness Operations

@@ -1,6 +1,5 @@
 import type { UsageSource } from "./usage/types";
 import type { SystemMetricKind } from "./metrics/types";
-import type { OverviewMetric, UsageOverviewMode } from "./usage/overview";
 
 export type { SystemMetricKind } from "./metrics/types";
 
@@ -32,8 +31,45 @@ const SYSTEM_DANGER_BACKGROUND = "#5A1F2C";
 const SYSTEM_UNAVAILABLE_BACKGROUND = "#202D3B";
 const SYSTEM_MIN_PERCENT = 0;
 const SYSTEM_MAX_PERCENT = 100;
+
+/**
+ * Value that fills the gauge completely, per metric.
+ *
+ * Percent-native metrics are full at 100. Network and GPU power have no intrinsic ceiling, so these
+ * are display conventions rather than machine properties — one table so a rescale is one edit.
+ */
+const SYSTEM_METRIC_FULL_SCALE: Record<SystemMetricKind, number> = {
+	cpu: SYSTEM_MAX_PERCENT,
+	gpu: SYSTEM_MAX_PERCENT,
+	memory: SYSTEM_MAX_PERCENT,
+	disk: SYSTEM_MAX_PERCENT,
+	network: 1_000,
+	"gpu-memory": SYSTEM_MAX_PERCENT,
+	"gpu-power": 500
+};
+
 const SYSTEM_MIN_TEMPERATURE_C = -50;
 const SYSTEM_MAX_TEMPERATURE_C = 150;
+const SYSTEM_NEUTRAL_BACKGROUND = "#172235";
+const SYSTEM_NEUTRAL_COLOR = "#5E8CFF";
+
+/**
+ * Fixed vertical rhythm of the System Monitor key face: header, value, gauge, footer.
+ *
+ * The rows are constants rather than inline numbers because the four bands must stay clear of each
+ * other at every text size the auto-fit can produce.
+ */
+const SYSTEM_HEADER_BASELINE = 44;
+const SYSTEM_VALUE_BASELINE = 92;
+const SYSTEM_GAUGE_X = 22;
+const SYSTEM_GAUGE_Y = 104;
+const SYSTEM_GAUGE_WIDTH = 100;
+const SYSTEM_GAUGE_HEIGHT = 9;
+/** A reading of exactly zero still draws this much fill, so it cannot be mistaken for no reading. */
+const SYSTEM_GAUGE_MIN_FILL = 3;
+/** Matches the dimming `renderKey` applies to a stale reading, so both key faces age the same way. */
+const SYSTEM_STALE_OPACITY = 0.6;
+const SYSTEM_FOOTER_BASELINE = 131;
 
 /** Font used by key faces whose text is part of the rendered SVG rather than Stream Deck's title layer. */
 const KEY_FONT_FAMILY = "Segoe UI, Helvetica, Arial, sans-serif";
@@ -78,16 +114,8 @@ export type SystemMonitorFace = {
 	usagePercent?: number;
 	temperatureC?: number;
 	status?: "ready" | "missing" | "stale" | "unsupported";
-};
-
-export type UsageOverviewProviderFace = OverviewMetric & {
-	source: UsageSource;
-};
-
-export type UsageOverviewFace = {
-	mode: UsageOverviewMode;
-	claude: UsageOverviewProviderFace;
-	codex: UsageOverviewProviderFace;
+	/** Which NVIDIA GPU the reading came from; shown in the header only when it is not the default. */
+	gpuIndex?: number;
 };
 
 /**
@@ -119,35 +147,20 @@ ${renderCaption(face.caption ?? "", captionColor)}
 
 /** Builds a deterministic, local-only key face for the Windows System Monitor action. */
 export function renderSystemMonitor(face: SystemMonitorFace): string {
-	const metricLabel = systemMetricLabel(face.metric);
 	const value = face.value ?? face.usagePercent;
 	const usageColor = isSystemValue(face.metric, value) ? "#F2F4F7" : SYSTEM_UNAVAILABLE_COLOR;
 	const temperature = temperaturePalette(face.temperatureC, face.metric, face.status);
-	const usageMarkup = renderSystemValue(face.metric, value, face.unit, usageColor);
-	const statusMarkup = renderSystemStatus(face.status);
+	const headerLabel = systemHeaderLabel(face.metric, face.gpuIndex);
 
 	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
 <rect width="${SIZE}" height="${SIZE}" fill="${temperature.background}"/>
 <rect x="8" y="8" width="128" height="128" rx="14" fill="#0B1220" opacity="0.52" stroke="${temperature.accent}" stroke-width="2"/>
-<g font-family="${KEY_FONT_FAMILY}" text-anchor="middle">
-<text x="72" y="55" fill="#F2F4F7" font-size="22" font-weight="700" letter-spacing="1.5">${escapeText(metricLabel)}</text>
-${usageMarkup}
-${statusMarkup}
-</g>
-</svg>`;
-
-	return `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
-}
-
-/** Builds the two-provider face used by the AI Usage Overview action. */
-export function renderUsageOverview(face: UsageOverviewFace): string {
-	const modeLabel = face.mode.toUpperCase();
-	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
-<rect width="${SIZE}" height="${SIZE}" fill="#0B1220"/>
 <g font-family="${KEY_FONT_FAMILY}">
-<text x="72" y="22" fill="#F2F4F7" font-size="13" font-weight="700" text-anchor="middle" letter-spacing="1.2">AI USAGE / ${escapeText(modeLabel)}</text>
-${renderOverviewRow(face.claude, 62)}
-${renderOverviewRow(face.codex, 103)}
+<text x="72" y="${SYSTEM_HEADER_BASELINE}" fill="#F2F4F7" font-size="${fitFontSize(headerLabel.length, 21, 13)}" font-weight="700" text-anchor="middle" letter-spacing="1.2">${escapeText(headerLabel)}</text>
+${renderSystemValue(face.metric, value, face.unit, usageColor, face.status)}
+${renderSystemGauge(face.metric, value, systemMonitorAccent(face), face.status)}
+${renderSystemStatus(face.status)}
+${renderSystemTemperature(face.metric, face.temperatureC, face.status)}
 </g>
 </svg>`;
 
@@ -292,13 +305,37 @@ export function formatSystemMetric(metric: SystemMetricKind, value: number | und
 	return `${Math.round(value)}%`;
 }
 
+/**
+ * Accent colour for one System Monitor reading.
+ *
+ * Shared by the key gauge and the Stream Deck+ dial bar so the two faces cannot drift apart.
+ */
+export function systemMonitorAccent(face: SystemMonitorFace): string {
+	// A stale reading keeps its magnitude but loses the ready accent, so an old value can never be read
+	// as a current one on either face.
+	return face.status === "stale" ? STALE_COLOR : temperaturePalette(face.temperatureC, face.metric, face.status).accent;
+}
+
+/** Temperature caption for the dial's header row, or `""` when the metric reports none. */
+export function formatSystemTemperature(face: SystemMonitorFace): string {
+	if (!hasTemperatureChannel(face.metric) || face.status === "unsupported" || !isSystemTemperature(face.temperatureC)) {
+		return "";
+	}
+
+	return `${Math.round(face.temperatureC)}°C`;
+}
+
+/** Status caption shared by both faces, or `""` when the reading needs no annotation. */
+export function systemStatusLabel(status: SystemMonitorFace["status"]): string {
+	return status === undefined || status === "ready" ? "" : status === "unsupported" ? "UNSUPPORTED" : status === "stale" ? "STALE" : "NO DATA";
+}
+
 export function systemMetricProgress(metric: SystemMetricKind, value: number | undefined): number | undefined {
 	if (!isSystemValue(metric, value)) {
 		return undefined;
 	}
 
-	const maximum = metric === "network" ? 1_000 : metric === "gpu-power" ? 500 : SYSTEM_MAX_PERCENT;
-	return Math.max(0, Math.min(100, (value / maximum) * 100));
+	return Math.max(0, Math.min(100, (value / SYSTEM_METRIC_FULL_SCALE[metric]) * 100));
 }
 
 function isSystemValue(metric: SystemMetricKind, value: number | undefined): value is number {
@@ -320,15 +357,51 @@ function isInRange(value: number | undefined, minimum: number, maximum: number):
 	return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum;
 }
 
-function renderSystemValue(metric: SystemMetricKind, value: number | undefined, unit: SystemMonitorFace["unit"], color: string): string {
+function renderSystemValue(metric: SystemMetricKind, value: number | undefined, unit: SystemMonitorFace["unit"], color: string, status: SystemMonitorFace["status"]): string {
 	const formatted = formatSystemMetric(metric, value, unit);
-	const size = fitFontSize(formatted.length, 48, 28);
-	return `<text x="72" y="112" fill="${color}" font-size="${size}" font-weight="700" style="font-variant-numeric:tabular-nums" font-feature-settings="'tnum'">${escapeText(formatted)}</text>`;
+	const size = fitFontSize(formatted.length, 44, 24);
+	return `<text x="72" y="${SYSTEM_VALUE_BASELINE}" fill="${color}" font-size="${size}" font-weight="700" text-anchor="middle" opacity="${status === "stale" ? SYSTEM_STALE_OPACITY : 1}" style="font-variant-numeric:tabular-nums" font-feature-settings="'tnum'">${escapeText(formatted)}</text>`;
+}
+
+/**
+ * Draws the magnitude gauge: a track that is always present, and a fill only when there is a reading.
+ *
+ * A genuine zero still gets a minimum-width nub so it stays distinguishable from a missing reading,
+ * which draws no fill at all.
+ */
+function renderSystemGauge(metric: SystemMetricKind, value: number | undefined, accent: string, status: SystemMonitorFace["status"]): string {
+	const track = `<rect x="${SYSTEM_GAUGE_X}" y="${SYSTEM_GAUGE_Y}" width="${SYSTEM_GAUGE_WIDTH}" height="${SYSTEM_GAUGE_HEIGHT}" rx="${SYSTEM_GAUGE_HEIGHT / 2}" fill="#0B1220" stroke="#2A3A55" stroke-width="1"/>`;
+	const progress = systemMetricProgress(metric, value);
+	if (progress === undefined) {
+		return track;
+	}
+
+	const width = Math.max(SYSTEM_GAUGE_MIN_FILL, round((progress / 100) * SYSTEM_GAUGE_WIDTH));
+	return `${track}
+<rect x="${SYSTEM_GAUGE_X}" y="${SYSTEM_GAUGE_Y}" width="${width}" height="${SYSTEM_GAUGE_HEIGHT}" rx="${SYSTEM_GAUGE_HEIGHT / 2}" fill="${accent}" opacity="${status === "stale" ? SYSTEM_STALE_OPACITY : 1}"/>`;
+}
+
+/** Draws the measured temperature as a chip, on the metrics that carry one. */
+function renderSystemTemperature(metric: SystemMetricKind, value: number | undefined, status: SystemMonitorFace["status"]): string {
+	if (!hasTemperatureChannel(metric) || status === "unsupported" || !isSystemTemperature(value)) {
+		return "";
+	}
+
+	return `<text x="130" y="${SYSTEM_FOOTER_BASELINE}" fill="${temperatureColor(value)}" font-size="14" font-weight="700" text-anchor="end" style="font-variant-numeric:tabular-nums" font-feature-settings="'tnum'">${Math.round(value)}&#176;</text>`;
+}
+
+/** The metrics whose reading is accompanied by a temperature sensor. */
+function hasTemperatureChannel(metric: SystemMetricKind): boolean {
+	return metric === "cpu" || metric === "gpu";
+}
+
+function temperatureColor(value: number): string {
+	return value >= 80 ? DANGER_COLOR : value >= 60 ? SYSTEM_AMBER_COLOR : SYSTEM_GOOD_COLOR;
 }
 
 function temperaturePalette(value: number | undefined, metric: SystemMetricKind, status: SystemMonitorFace["status"]): { background: string; accent: string } {
-	if (metric !== "cpu" && metric !== "gpu") {
-		return { background: "#172235", accent: status === "unsupported" ? SYSTEM_UNAVAILABLE_COLOR : "#5E8CFF" };
+	if (!hasTemperatureChannel(metric)) {
+		return { background: SYSTEM_NEUTRAL_BACKGROUND, accent: status === "unsupported" ? SYSTEM_UNAVAILABLE_COLOR : SYSTEM_NEUTRAL_COLOR };
 	}
 	if (!isSystemTemperature(value) || status === "unsupported") {
 		return { background: SYSTEM_UNAVAILABLE_BACKGROUND, accent: SYSTEM_UNAVAILABLE_COLOR };
@@ -350,39 +423,23 @@ function renderSystemStatus(status: SystemMonitorFace["status"]): string {
 		return "";
 	}
 
-	const label = status === "unsupported" ? "UNSUPPORTED" : status === "stale" ? "STALE" : "NO DATA";
+	const label = systemStatusLabel(status);
 	const color = status === "stale" ? STALE_COLOR : SYSTEM_UNAVAILABLE_COLOR;
-	return `<text x="72" y="132" fill="${color}" font-size="11" font-weight="600" letter-spacing="1">${label}</text>`;
+	return `<text x="14" y="${SYSTEM_FOOTER_BASELINE}" fill="${color}" font-size="11" font-weight="600" text-anchor="start" letter-spacing="1">${label}</text>`;
 }
 
-/**
- * Colour for one Usage Overview provider row.
- *
- * Shared by the key SVG and the Stream Deck+ dial feedback so the two faces cannot drift apart.
- */
-export function overviewStateColor(provider: UsageOverviewProviderFace): string {
-	const brand = BRANDS[provider.source];
-	return provider.state === "warning" ? DANGER_COLOR : provider.state === "stale" ? STALE_COLOR : provider.state === "ready" ? brand.accent : SYSTEM_UNAVAILABLE_COLOR;
+/** Header text: the metric name, plus the GPU index when it is not the default one. */
+export function systemHeaderLabel(metric: SystemMetricKind, gpuIndex: number | undefined): string {
+	const label = systemMetricLabel(metric);
+	if (!isGpuScoped(metric) || typeof gpuIndex !== "number" || !Number.isInteger(gpuIndex) || gpuIndex <= 0) {
+		return label;
+	}
+
+	return `${label} #${gpuIndex}`;
 }
 
-/** Short status caption for one provider row, or `""` when the reading needs no annotation. */
-export function overviewDetailLabel(provider: UsageOverviewProviderFace): string {
-	return provider.state === "stale" ? "STALE" : provider.detail === "no-burn" ? "NO RATE" : provider.detail === "no-reset" ? "NO RESET" : provider.state === "missing" ? "NO DATA" : "";
-}
-
-/** Brand accent colour for one usage source, used for the provider label on both faces. */
-export function overviewBrandAccent(source: UsageSource): string {
-	return BRANDS[source].accent;
-}
-
-function renderOverviewRow(provider: UsageOverviewProviderFace, y: number): string {
-	const brand = BRANDS[provider.source];
-	const color = overviewStateColor(provider);
-	const detail = overviewDetailLabel(provider);
-	return `<line x1="10" y1="${y + 9}" x2="134" y2="${y + 9}" stroke="#22304A" stroke-width="1"/>
-<text x="14" y="${y}" fill="${brand.accent}" font-size="13" font-weight="700" letter-spacing="1">${escapeText(provider.source.toUpperCase())}</text>
-<text x="130" y="${y}" fill="${color}" font-size="22" font-weight="700" text-anchor="end" style="font-variant-numeric:tabular-nums">${escapeText(provider.text)}</text>
-${detail === "" ? "" : `<text x="14" y="${y + 16}" fill="${color}" font-size="9" font-weight="600" letter-spacing="0.8">${detail}</text>`}`;
+function isGpuScoped(metric: SystemMetricKind): boolean {
+	return metric === "gpu" || metric === "gpu-memory" || metric === "gpu-power";
 }
 
 function systemMetricLabel(metric: SystemMetricKind): string {

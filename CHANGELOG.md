@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- [done] Rework System Monitor UI/UX and drop AI Usage Overview and Warp URI (ai-usage-streamdeck v0.7.0) (2026-08-06) → docs/design/system-monitor-ux.md
+
 - [done] Dial layout slots and CPU package temperature (ai-usage-streamdeck v0.6.0) (2026-08-06) → docs/runbook.md
 - [done] Expand usage, metrics, and Warp actions (ai-usage-streamdeck v0.5.0) (2026-08-06) -> docs/runbook.md
 - [done] Always open Warp Tab Configs in a new tab; remove the new-window option (2026-08-06) -> docs/runbook.md

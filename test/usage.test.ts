@@ -4,11 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { isCurrentUsageOverviewRevision } from "../src/actions/usage-overview";
 import { currentWindowSamples, projectExhaustion } from "../src/usage/burn-rate";
 import { readClaudeUsage } from "../src/usage/claude";
 import { readCodexUsage } from "../src/usage/codex";
-import { getOverviewMetric, nextUsageOverviewMode } from "../src/usage/overview";
 import { NoUsageDataError, type UsageReading } from "../src/usage/types";
 
 test("Claude reader rejects invalid percentage, timestamp, and reset values", async () => {
@@ -86,25 +84,3 @@ test("burn projection ignores samples before the latest reset", () => {
 	assert.equal(projection?.percentPerHour, 10);
 });
 
-test("overview modes expose used, remaining, burn, and reset states", () => {
-	const now = new Date("2026-08-06T12:00:00.000Z");
-	const reading: UsageReading = {
-		usedPercent: 40,
-		observedAt: new Date("2026-08-06T11:00:00.000Z"),
-		resetsAt: new Date("2026-08-07T12:00:00.000Z"),
-		history: [{ usedPercent: 20, at: new Date("2026-08-06T00:00:00.000Z") }]
-	};
-	const provider = { source: "claude" as const, reading, burn: projectExhaustion(reading, now) };
-
-	assert.equal(getOverviewMetric(provider, "used", now).text, "40%");
-	assert.equal(getOverviewMetric(provider, "remaining", now).text, "60%");
-	assert.match(getOverviewMetric(provider, "burn", now).text, /%\/h/);
-	assert.equal(getOverviewMetric(provider, "reset", now).text, "1d 0h");
-	assert.equal(nextUsageOverviewMode("used"), "remaining");
-});
-
-test("usage overview ignores an older asynchronous render after a mode change", () => {
-	assert.equal(isCurrentUsageOverviewRevision(2, 1), false);
-	assert.equal(isCurrentUsageOverviewRevision(2, 2), true);
-	assert.equal(isCurrentUsageOverviewRevision(undefined, 1), false);
-});

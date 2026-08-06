@@ -1,0 +1,54 @@
+{
+	"$schema": "https://schemas.elgato.com/streamdeck/plugins/layout.json",
+	"id": "system-monitor",
+	"items": [
+		{
+			"key": "title",
+			"type": "text",
+			"rect": [4, 4, 120, 18],
+			"alignment": "left",
+			"color": "#F2F4F7",
+			"font": { "size": 14, "weight": 600 },
+			"value": "CPU"
+		},
+		{
+			"key": "temperature",
+			"type": "text",
+			"rect": [128, 4, 68, 18],
+			"alignment": "right",
+			"color": "#6B7076",
+			"font": { "size": 14, "weight": 600 },
+			"value": ""
+		},
+		{
+			"key": "value",
+			"type": "text",
+			"rect": [4, 26, 192, 34],
+			"alignment": "center",
+			"color": "#F2F4F7",
+			"font": { "size": 28, "weight": 700 },
+			"value": "--"
+		},
+		{
+			"key": "indicator",
+			"type": "bar",
+			"rect": [4, 64, 192, 12],
+			"subtype": 4,
+			"bar_bg_c": "#0B1220",
+			"bar_border_c": "#2A3A55",
+			"bar_fill_c": "#5E8CFF",
+			"border_w": 1,
+			"range": { "min": 0, "max": 100 },
+			"value": 0
+		},
+		{
+			"key": "status",
+			"type": "text",
+			"rect": [4, 80, 192, 16],
+			"alignment": "center",
+			"color": "#6B7076",
+			"font": { "size": 11, "weight": 600 },
+			"value": ""
+		}
+	]
+}
