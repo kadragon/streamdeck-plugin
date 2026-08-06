@@ -34,6 +34,7 @@ com.kadragon.aiusage.sdPlugin/
   ui/weekly-limit.html         # Property Inspector settings
   ui/system-monitor.html       # Local system metric selector
   ui/warp-tab-config.html      # Warp Tab Config selector
+  layouts/system-monitor.json  # Stream Deck+ dial feedback layout
   imgs/                        # Checked-in package artwork
   bin/                         # Generated build output; do not edit
 ```
