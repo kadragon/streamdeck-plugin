@@ -52,7 +52,7 @@ The manifest, generated bundle, property inspector, and setup docs agree.
 
 | Score | Description |
 |-------|-------------|
-| 5 | CI checks type safety, build, principles, smoke behavior, and generated package output; package links and validates where network permits. |
+| 5 | CI checks type safety, build, principles, and generated package output; package links and validates where network permits. |
 | 4 | Build and setup work; one optional Stream Deck validation is unavailable. |
 | 3 | Build works and setup is documented; packaging still needs manual confirmation. |
 | 2 | Manifest/build/docs drift or setup requires undocumented steps. |

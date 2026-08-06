@@ -1,6 +1,6 @@
 {
 	"Name": "Dev Toolkit",
-	"Version": "0.3.1.0",
+	"Version": "0.4.0.0",
 	"Author": "kadragon",
 	"Actions": [
 		{
@@ -20,11 +20,11 @@
 			]
 		},
 		{
-			"Name": "Agent Attention",
-			"UUID": "com.kadragon.aiusage.agent-attention",
+			"Name": "System Monitor",
+			"UUID": "com.kadragon.aiusage.system-monitor",
 			"Icon": "imgs/actions/usage/icon",
-			"Tooltip": "Blinks when a wrapped Claude Code or Codex CLI session needs attention.",
-			"PropertyInspectorPath": "ui/agent-attention.html",
+			"Tooltip": "Shows selected Windows CPU or NVIDIA GPU utilization; temperature is shown by background color.",
+			"PropertyInspectorPath": "ui/system-monitor.html",
 			"Controllers": [
 				"Keypad"
 			],
@@ -55,7 +55,7 @@
 	"Category": "Dev Toolkit",
 	"CategoryIcon": "imgs/plugin/category-icon",
 	"CodePath": "bin/plugin.js",
-	"Description": "Shows weekly rate-limit usage, Warp tab attention, and selected Warp Tab Config launchers.",
+	"Description": "Shows weekly rate-limit usage, local Windows system metrics, and selected Warp Tab Config launchers.",
 	"Icon": "imgs/plugin/marketplace",
 	"SDKVersion": 3,
 	"Software": {

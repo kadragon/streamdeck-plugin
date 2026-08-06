@@ -8,6 +8,8 @@
 - npm (`npm --version`)
 - Stream Deck CLI available as `streamdeck` for linking/validation
 - Bash and `jq` for the Claude status-line wrapper and harness scripts
+- Windows 10 or later for the System Monitor action
+- NVIDIA driver with `nvidia-smi.exe` available on PATH for GPU readings
 
 ### Setup
 
@@ -25,26 +27,21 @@ bash /c/dev/stream-deck-plugin/scripts/statusline-usage-snapshot.sh
 
 The wrapper writes `~/.claude/ai-usage/claude.json` and `claude-history.jsonl`, then forwards stdin to the latest `claude-hud` plugin when available.
 
-### Warp agent attention
+### System Monitor
 
-Build and link the plugin, then add an Agent Attention action for each fixed Warp tab slot. Start each
-interactive agent through `scripts/agent-wrap.mjs`:
+The **System Monitor** action is Windows-only. Choose CPU or GPU in its Property Inspector; the key shows
+only the selected utilization percentage, while the background color represents that metric's temperature.
+CPU utilization and high-precision thermal-zone temperature come from PowerShell `Get-Counter`; NVIDIA
+GPU utilization and temperature come from the first row of:
 
-```powershell
-node C:/dev/stream-deck-plugin/scripts/agent-wrap.mjs --source claude --tab 1 -- claude
-node C:/dev/stream-deck-plugin/scripts/agent-wrap.mjs --source codex --tab 2 -- codex
+```text
+nvidia-smi.exe --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits
 ```
 
-Merge `scripts/claude-agent-hooks.example.json` into `~/.claude/settings.json` and
-`scripts/codex-agent-hooks.example.json` into `~/.codex/hooks.json`, replacing the placeholder script
-path with this repository's absolute path. The hook process inherits the wrapper's slot/runtime
-environment. `AGENT_ATTENTION_STATE_DIR` overrides the shared local event directory when WSL or another
-agent environment cannot see the plugin's default home directory.
-
-The focus adapter uses `Ctrl+1` through `Ctrl+8` on Windows and `Cmd+1` through `Cmd+8` on macOS. On
-Windows it keeps Warp maximized before selecting the tab; macOS leaves the current window mode
-unchanged. System Events may require Accessibility permission. v1 does not support dynamic tab
-discovery, tab 9, multiple Warp windows, or tab reordering.
+The key refreshes immediately when it appears, every five seconds while visible, and again after
+system wake. If PowerShell counters, `nvidia-smi.exe`, or an individual reading is unavailable or
+invalid, that field shows `--` rather than zero. The key background is green below 60 C, amber from
+60 through 79.9 C, and red at 80 C or higher.
 
 ### Warp Tab Config launcher
 
@@ -72,8 +69,7 @@ Preview configs are listed when present and use Warp's `warppreview://` URI sche
 | `npm run build` | Rollup production bundle |
 | `npm run check:principles` | Golden-principle structural checks with agent-readable fixes |
 | `npm run check:package` | Manifest and generated Stream Deck package-output checks |
-| `npm run test:agent-attention` | Wrapper, hook classification, and atomic event-spool smoke checks |
-| `npm run check` | Typecheck, principle checks, Agent Attention smoke checks, and build |
+| `npm run check` | Typecheck, principle checks, and build |
 | `npm run watch` | Watch/rebuild and restart the linked plugin |
 | `streamdeck validate` | Remote Stream Deck package validation; requires network access |
 
@@ -122,6 +118,13 @@ There is no automated publish/deploy workflow. Build and link the local `.sdPlug
 **Cause:** A shell/Python file was saved with CRLF.
 
 **Fix:** Preserve the `.gitattributes` LF rule and convert the file before committing.
+
+### Windows Git shows unrelated line-ending changes
+
+**Cause:** `core.autocrlf=true` can rewrite existing repository text files while a feature is being staged.
+
+**Fix:** Set `git config core.autocrlf false` in the repository, then review with
+`git diff --ignore-space-at-eol` before committing.
 
 ## Sweep Trigger Policy
 

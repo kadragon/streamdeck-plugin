@@ -1,15 +1,14 @@
 {
     "name": "streamdeck-plugin",
-    "version": "0.3.1",
+    "version": "0.4.0",
     "private": true,
-    "description": "Stream Deck plugin showing weekly rate-limit usage, Warp tab attention, and selected Warp Tab Config launchers.",
+    "description": "Stream Deck plugin showing weekly usage, local Windows system metrics, and selected Warp Tab Config launchers.",
     "scripts": {
         "typecheck": "tsc --noEmit",
         "build": "rollup -c",
         "check:principles": "node scripts/check-principles.mjs",
         "check:package": "node scripts/check-package.mjs",
-        "test:agent-attention": "node scripts/agent-attention-smoke.mjs",
-        "check": "npm run typecheck && npm run check:principles && npm run test:agent-attention && npm run build",
+        "check": "npm run typecheck && npm run check:principles && npm run build",
         "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.kadragon.aiusage\""
     },
     "type": "module",

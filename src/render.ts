@@ -19,6 +19,18 @@ const DANGER_COLOR = "#FF5A5F";
 /** Colour used for everything that marks a reading as no longer current. */
 const STALE_COLOR = "#E0A33E";
 
+const SYSTEM_AMBER_COLOR = "#FFB84D";
+const SYSTEM_GOOD_COLOR = "#48D597";
+const SYSTEM_UNAVAILABLE_COLOR = "#6B7076";
+const SYSTEM_GOOD_BACKGROUND = "#14503D";
+const SYSTEM_AMBER_BACKGROUND = "#5A3D14";
+const SYSTEM_DANGER_BACKGROUND = "#5A1F2C";
+const SYSTEM_UNAVAILABLE_BACKGROUND = "#202D3B";
+const SYSTEM_MIN_PERCENT = 0;
+const SYSTEM_MAX_PERCENT = 100;
+const SYSTEM_MIN_TEMPERATURE_C = -50;
+const SYSTEM_MAX_TEMPERATURE_C = 150;
+
 /** Font used by key faces whose text is part of the rendered SVG rather than Stream Deck's title layer. */
 const KEY_FONT_FAMILY = "Segoe UI, Helvetica, Arial, sans-serif";
 
@@ -50,18 +62,17 @@ export type KeyFace = {
 	warn?: boolean;
 };
 
-export type AgentKeyFace = {
-	source: UsageSource;
-	tabNumber: number;
-	status?: "started" | "running" | "attention";
-	reason?: string;
-	/** Alternates the attention face so an active key visibly blinks. */
-	blinkOn?: boolean;
-};
-
 export type WarpTabKeyFace = {
 	/** Selected filename stem, or `undefined` while the property inspector has no selection. */
 	label?: string;
+};
+
+export type SystemMetricKind = "cpu" | "gpu";
+
+export type SystemMonitorFace = {
+	metric: SystemMetricKind;
+	usagePercent?: number;
+	temperatureC?: number;
 };
 
 /**
@@ -91,29 +102,19 @@ ${renderCaption(face.caption ?? "", captionColor)}
 	return `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
 }
 
-/**
- * Builds the fixed-slot agent attention face.
- *
- * The attention state alternates between a dark and an amber face; the action owns the timer so this
- * renderer remains pure and deterministic.
- */
-export function renderAgentKey(face: AgentKeyFace): string {
-	const brand = BRANDS[face.source];
-	const status = face.status === "attention" ? attentionLabel(face.reason) : face.status === "running" || face.status === "started" ? "RUNNING" : "READY";
-	const attention = face.status === "attention";
-	const blinkOn = face.blinkOn === true;
-	const background = attention && blinkOn ? "#5A2A13" : brand.backdrop;
-	const statusColor = attention ? (blinkOn ? "#FFD166" : "#E0A33E") : face.status === "running" || face.status === "started" ? brand.accent : "#9AA0A8";
-	const statusOpacity = attention && !blinkOn ? 0.7 : 1;
+/** Builds a deterministic, local-only key face for the Windows System Monitor action. */
+export function renderSystemMonitor(face: SystemMonitorFace): string {
+	const metricLabel = face.metric.toUpperCase();
+	const usageColor = isSystemPercent(face.usagePercent) ? "#F2F4F7" : SYSTEM_UNAVAILABLE_COLOR;
+	const temperature = temperaturePalette(face.temperatureC);
+	const usageMarkup = renderSystemPercent(face.usagePercent, usageColor);
 
 	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
-<rect width="${SIZE}" height="${SIZE}" fill="${background}"/>
+<rect width="${SIZE}" height="${SIZE}" fill="${temperature.background}"/>
+<rect x="8" y="8" width="128" height="128" rx="14" fill="#0B1220" opacity="0.52" stroke="${temperature.accent}" stroke-width="2"/>
 <g font-family="${KEY_FONT_FAMILY}" text-anchor="middle">
-<text x="72" y="31" fill="${brand.accent}" font-size="17" font-weight="700" letter-spacing="1.5" opacity="${attention && !blinkOn ? 0.65 : 1}">${escapeText(brand.label)}</text>
-<text x="72" y="83" fill="${attention && blinkOn ? "#FFD166" : "#F2F4F7"}" font-size="48" font-weight="700" style="font-variant-numeric:tabular-nums">${escapeText(String(face.tabNumber))}</text>
-<text x="72" y="108" fill="${statusColor}" font-size="16" font-weight="700" letter-spacing="1" opacity="${statusOpacity}">${escapeText(status)}</text>
-<text x="72" y="130" fill="#9AA0A8" font-size="12" font-weight="600">${attention ? "PRESS TO FOCUS" : "WARP TAB"}</text>
-${attention ? `<circle cx="129" cy="24" r="4.5" fill="${blinkOn ? "#FFD166" : "#E0A33E"}" opacity="${blinkOn ? 1 : 0.55}"/>` : ""}
+<text x="72" y="55" fill="#F2F4F7" font-size="22" font-weight="700" letter-spacing="1.5">${escapeText(metricLabel)}</text>
+${usageMarkup}
 </g>
 </svg>`;
 
@@ -175,14 +176,6 @@ function splitWarpTabLabel(value: string | undefined): string[] {
 	}
 
 	return lines.length > 0 ? lines : [normalized];
-}
-
-function attentionLabel(reason: string | undefined): string {
-	if (reason === "permission" || reason === "input" || reason === "elicitation") {
-		return "INPUT";
-	}
-
-	return "DONE";
 }
 
 /**
@@ -249,6 +242,44 @@ export function formatCountdown(resetsAt: Date, now: Date): string {
 
 function round(value: number): number {
 	return Math.round(value * 10) / 10;
+}
+
+function isSystemPercent(value: number | undefined): value is number {
+	return isInRange(value, SYSTEM_MIN_PERCENT, SYSTEM_MAX_PERCENT);
+}
+
+function isSystemTemperature(value: number | undefined): value is number {
+	return isInRange(value, SYSTEM_MIN_TEMPERATURE_C, SYSTEM_MAX_TEMPERATURE_C);
+}
+
+function isInRange(value: number | undefined, minimum: number, maximum: number): value is number {
+	return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum;
+}
+
+function renderSystemPercent(value: number | undefined, color: string): string {
+	if (!isSystemPercent(value)) {
+		return `<text x="72" y="112" fill="${color}" font-size="38" font-weight="700" style="font-variant-numeric:tabular-nums" font-feature-settings="'tnum'">--</text>`;
+	}
+
+	const digits = `${Math.round(value)}`;
+	const size = fitFontSize(digits.length + 0.45, 52, 36);
+	return `<text x="72" y="112" fill="${color}" font-size="${size}" font-weight="700" style="font-variant-numeric:tabular-nums" font-feature-settings="'tnum'">${escapeText(digits)}<tspan font-size="${round(size * 0.45)}" dy="-3">%</tspan></text>`;
+}
+
+function temperaturePalette(value: number | undefined): { background: string; accent: string } {
+	if (!isSystemTemperature(value)) {
+		return { background: SYSTEM_UNAVAILABLE_BACKGROUND, accent: SYSTEM_UNAVAILABLE_COLOR };
+	}
+
+	if (value >= 80) {
+		return { background: SYSTEM_DANGER_BACKGROUND, accent: DANGER_COLOR };
+	}
+
+	if (value >= 60) {
+		return { background: SYSTEM_AMBER_BACKGROUND, accent: SYSTEM_AMBER_COLOR };
+	}
+
+	return { background: SYSTEM_GOOD_BACKGROUND, accent: SYSTEM_GOOD_COLOR };
 }
 
 /**

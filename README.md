@@ -1,13 +1,31 @@
 # Stream Deck plugin
 
 A personal Stream Deck plugin bundling the keys I use while working with terminal AI agents. Everything
-is read from files the tools write locally; the plugin never calls an API.
+is read from local files or native local commands; the plugin never calls an API.
 
 | Action | What the key does |
 | --- | --- |
 | **Weekly Limit** | Shows how much of the weekly rate-limit allowance Claude Code or Codex CLI has consumed |
-| **Agent Attention** | Blinks when a wrapped agent session needs you, and focuses its Warp tab when pressed |
+| **System Monitor** | Shows local Windows CPU and NVIDIA GPU utilization and temperatures on one key |
 | **Warp Tab Config** | Opens one of Warp's saved Tab Configs |
+
+## System Monitor (Windows)
+
+The **System Monitor** action is Windows-only. Choose **CPU** or **GPU** in the action's Property
+Inspector. The key then shows only the selected utilization percentage; its background color represents
+that metric's temperature. It reads CPU utilization from the Windows performance
+counter `\Processor(_Total)\% Processor Time` and CPU thermal-zone data from
+`\Thermal Zone Information(*)\High Precision Temperature` through PowerShell `Get-Counter`. It reads the first NVIDIA
+GPU with:
+
+```text
+nvidia-smi.exe --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits
+```
+
+The NVIDIA driver must provide `nvidia-smi.exe` on PATH. The key refreshes every five seconds and
+refreshes again after system wake. Missing counters, an unavailable `nvidia-smi.exe`, and invalid
+readings show `--`; they are never displayed as zero. Available temperatures tint the background green
+below 60 C, amber from 60 through 79.9 C, and red at 80 C or higher.
 
 ## Weekly Limit — where the numbers come from
 
@@ -91,42 +109,7 @@ press does not re-read. Defaults:
 Keys also refresh automatically when the machine wakes from sleep (`onSystemDidWakeUp`), since nothing
 is read while it is asleep.
 
-## Agent attention for Warp
-
-The **Agent Attention** action blinks when a wrapped Claude Code or Codex CLI session finishes a turn or
-waits for input, then focuses a configured Warp tab when pressed. Choose the source that matches the
-wrapped process; v1 does not auto-detect it. This first version uses fixed tab positions 1-8 in one
-Warp window; it does not discover or track tabs after they are reordered.
-
-### Start an agent through the wrapper
-
-Use the same tab number configured on the Stream Deck key. Keep the command after `--` so all of its
-arguments pass through unchanged:
-
-```powershell
-node C:/dev/stream-deck-plugin/scripts/agent-wrap.mjs --source claude --tab 3 -- claude
-node C:/dev/stream-deck-plugin/scripts/agent-wrap.mjs --source codex --tab 4 -- codex
-```
-
-The wrapper inherits the interactive terminal's stdio and publishes only local lifecycle metadata. It
-sets `AGENT_ATTENTION_RUNTIME_ID`, `AGENT_ATTENTION_TAB`, and `AGENT_ATTENTION_STATE_DIR` for the child
-so its hooks can associate events with the configured slot.
-
-### Configure hooks
-
-Merge the matching example into the tool's existing configuration; replace the placeholder script path:
-
-- Claude Code: `scripts/claude-agent-hooks.example.json` into `~/.claude/settings.json`
-- Codex CLI: `scripts/codex-agent-hooks.example.json` into `~/.codex/hooks.json` (or the active hooks config)
-
-The hook command must use the same `node` installation visible to the wrapped agent. Codex may ask you
-to review and trust the hook definitions before running them. Hooks without the wrapper's tab environment
-are intentionally ignored, so an unwrapped session cannot be assigned to the wrong key.
-
-Set `AGENT_ATTENTION_STATE_DIR` explicitly when the agent runs in WSL or another environment whose home
-directory differs from the Stream Deck process. The directory is local and contains short JSON event files;
-assistant messages and terminal output are never written there.
-
+## Launch a Warp Tab Config
 ## Launch a Warp Tab Config
 
 The **Warp Tab Config** action opens one of Warp's saved `.toml` Tab Configs from a Stream Deck key.
