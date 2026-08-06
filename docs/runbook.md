@@ -61,6 +61,7 @@ Preview configs are listed when present and use Warp's `warppreview://` URI sche
 
 - `npm run typecheck` exits 0.
 - `npm run build` creates `com.kadragon.aiusage.sdPlugin/bin/plugin.js`.
+- `npm run check:package` exits 0 after the build and confirms the generated package entry point and metadata.
 - `streamdeck link` installs the package; press a configured key after the corresponding source has produced local data.
 
 ## Build and Check
@@ -70,6 +71,7 @@ Preview configs are listed when present and use Warp's `warppreview://` URI sche
 | `npm run typecheck` | TypeScript check without emitting |
 | `npm run build` | Rollup production bundle |
 | `npm run check:principles` | Golden-principle structural checks with agent-readable fixes |
+| `npm run check:package` | Manifest and generated Stream Deck package-output checks |
 | `npm run test:agent-attention` | Wrapper, hook classification, and atomic event-spool smoke checks |
 | `npm run check` | Typecheck, principle checks, Agent Attention smoke checks, and build |
 | `npm run watch` | Watch/rebuild and restart the linked plugin |
@@ -123,7 +125,7 @@ There is no automated publish/deploy workflow. Build and link the local `.sdPlug
 
 ## Sweep Trigger Policy
 
-Manual, by default: run `bash tools/sweep.sh` between features or after a harness change. CI runs the quick principle check and full structural validation on pushes to `main` and pull requests; the full sweep remains manual to avoid a heavy session-start loop.
+Manual, by default: run `bash tools/sweep.sh` between features or after a harness change. CI runs `npm run check` and the generated package-output check on pushes to `main` and pull requests; harness validation and the full sweep remain manual maintenance operations.
 
 ## Scratchpad Convention
 

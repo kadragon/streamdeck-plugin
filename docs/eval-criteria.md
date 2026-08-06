@@ -48,17 +48,17 @@ The key face communicates source, percentage, stale state, alert state, reset co
 
 ### 4. Packaging and operations (weight: 20%)
 
-The manifest, generated bundle, property inspector, setup docs, and harness checks agree.
+The manifest, generated bundle, property inspector, and setup docs agree.
 
 | Score | Description |
 |-------|-------------|
-| 5 | CI checks type safety, build, principles, harness structure, and sweep; package links and validates where network permits. |
+| 5 | CI checks type safety, build, principles, smoke behavior, and generated package output; package links and validates where network permits. |
 | 4 | Build and setup work; one optional Stream Deck validation is unavailable. |
 | 3 | Build works and setup is documented; packaging still needs manual confirmation. |
 | 2 | Manifest/build/docs drift or setup requires undocumented steps. |
 | 1 | The package cannot be built or linked. |
 
-**How to test:** `npm run check`, `bash scripts/validate-harness.sh`, `bash tools/sweep.sh`, then `streamdeck link com.kadragon.aiusage.sdPlugin` when Stream Deck is installed.
+**How to test:** `npm run check`, `npm run check:package`, then `streamdeck link com.kadragon.aiusage.sdPlugin` when Stream Deck is installed; run harness maintenance checks separately when the harness changes.
 
 ## Pass Threshold
 
