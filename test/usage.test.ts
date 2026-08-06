@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { isCurrentUsageOverviewRevision } from "../src/actions/usage-overview";
 import { currentWindowSamples, projectExhaustion } from "../src/usage/burn-rate";
 import { readClaudeUsage } from "../src/usage/claude";
 import { readCodexUsage } from "../src/usage/codex";
@@ -100,4 +101,10 @@ test("overview modes expose used, remaining, burn, and reset states", () => {
 	assert.match(getOverviewMetric(provider, "burn", now).text, /%\/h/);
 	assert.equal(getOverviewMetric(provider, "reset", now).text, "1d 0h");
 	assert.equal(nextUsageOverviewMode("used"), "remaining");
+});
+
+test("usage overview ignores an older asynchronous render after a mode change", () => {
+	assert.equal(isCurrentUsageOverviewRevision(2, 1), false);
+	assert.equal(isCurrentUsageOverviewRevision(2, 2), true);
+	assert.equal(isCurrentUsageOverviewRevision(undefined, 1), false);
 });

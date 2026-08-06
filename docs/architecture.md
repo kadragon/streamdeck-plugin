@@ -17,7 +17,7 @@
 src/plugin.ts                  # SDK registration and wake-up refresh
 src/actions/weekly-limit.ts    # Settings, lifecycle, ticker, source selection
 src/actions/usage-overview.ts  # Combined Claude/Codex usage modes and encoder feedback
-src/actions/system-metrics.ts  # Windows-only lifecycle, five-second ticker, wake refresh
+src/actions/system-metrics.ts  # Windows-only lifecycle, fifteen-second ticker, wake refresh
 src/actions/warp-tab-config.ts # Dynamic Tab Config selection and URI launch
 src/actions/warp-uri.ts        # Validated Warp and Warp Preview URI launcher
 src/render.ts                  # Pure SVG key-face rendering and time formatting
@@ -36,9 +36,9 @@ com.kadragon.aiusage.sdPlugin/
   manifest.json                # Stream Deck package contract
   ui/weekly-limit.html         # Property Inspector settings
   ui/system-monitor.html       # Local system metric selector
-	  ui/warp-tab-config.html      # Warp Tab Config selector
-	  ui/usage-overview.html       # Combined usage settings
-	  ui/warp-uri.html             # Warp URI setting
+  ui/warp-tab-config.html      # Warp Tab Config selector
+  ui/usage-overview.html       # Combined usage settings
+  ui/warp-uri.html             # Warp URI setting
   imgs/                        # Checked-in package artwork
   bin/                         # Generated build output; do not edit
 ```
@@ -66,7 +66,7 @@ plugin -> actions -> render
 - Usage readers return `UsageReading`; invalid or missing local data becomes `NoUsageDataError`.
 - `renderKey` accepts a `KeyFace` and returns an SVG data URI; user-controlled caption text is escaped.
 - The Property Inspector sends settings through Stream Deck events; the ticker uses the latest event payload rather than polling IPC.
-- `SystemMonitor` refreshes visible keys and encoders every five seconds, shares one local metrics sample
+- `SystemMonitor` refreshes visible keys and encoders every fifteen seconds, shares one local metrics sample
   across all visible instances, and exposes a forced `refreshAll` hook for wake-up refreshes.
 - The System Monitor Property Inspector supplies the selected metric and GPU index through settings events; the ticker uses the latest event payload.
 - `readWindowsMetrics` rejects non-Windows hosts and keeps missing or invalid metric fields undefined.
@@ -80,9 +80,10 @@ Warp Tab Config discovery also stays local. The action scans Warp's platform-spe
 directory for `.toml` files, uses the filename stem as the launch identity, and reads only the optional
 top-level `name` for the Property Inspector label. It does not parse or execute config commands itself.
 
-The System Monitor data path is Windows-only. CPU utilization and thermal-zone temperature come from
-PowerShell `Get-Counter`; RAM and disk usage come from local CIM data; network throughput comes from
-the local network performance counter. NVIDIA utilization, temperature, memory, and power come from
+The System Monitor data path is Windows-only. CPU utilization, RAM, disk usage, and network throughput
+come from local CIM classes (`Win32_PerfFormattedData_*`, `Win32_OperatingSystem`, `Win32_LogicalDisk`),
+chosen over `Get-Counter` paths because counter names are localized; the ACPI thermal zone comes from
+`MSAcpi_ThermalZoneTemperature` with a `Get-Counter` fallback. NVIDIA utilization, temperature, memory, and power come from
 `nvidia-smi.exe`, with the selected GPU index retained in settings. The NVIDIA driver's utility must be
 available on PATH. Missing counters, a missing NVIDIA utility, and invalid ranges leave only the affected
 fields unavailable.

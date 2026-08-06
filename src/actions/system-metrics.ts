@@ -23,7 +23,7 @@ import {
 import { isSystemMetricKind, type SystemMetricKind } from "../metrics/types";
 import { formatSystemMetric, renderSystemMonitor, systemMetricProgress } from "../render";
 
-const REFRESH_INTERVAL_MS = 5_000;
+const REFRESH_INTERVAL_MS = 15_000;
 const DEFAULT_METRIC: SystemMetricKind = "cpu";
 const DEFAULT_GPU_INDEX = 0;
 
@@ -50,7 +50,8 @@ export class SystemMonitor extends SingletonAction<SystemMonitorSettings> {
 
 	override onWillDisappear(ev: WillDisappearEvent<SystemMonitorSettings>): void {
 		this.#settings.delete(ev.action.id);
-		this.#settingsRevision.delete(ev.action.id);
+		// The revision counter is deliberately kept: a context that reappears must not restart at a
+		// value an in-flight render from the previous appearance could still match.
 		if ([...this.actions].length === 0) {
 			this.#stopTicker();
 		}

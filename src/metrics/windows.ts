@@ -8,7 +8,9 @@ const execFileAsync = promisify(execFile);
 const POWERSHELL = "powershell.exe";
 const NVIDIA_SMI = "nvidia-smi.exe";
 const MAX_BUFFER = 32 * 1024;
-const DEFAULT_SAMPLE_INTERVAL_MS = 5_000;
+// One sample costs seconds (PowerShell start, CIM queries, the thermal-zone fallback, nvidia-smi),
+// so the interval stays well above the sample cost to keep the monitor from loading the machine.
+const DEFAULT_SAMPLE_INTERVAL_MS = 15_000;
 
 export type NvidiaGpuMetrics = {
 	index: number;
@@ -23,7 +25,8 @@ export type NvidiaGpuMetrics = {
 export type SystemMetrics = {
 	sampledAt?: Date;
 	cpuUsagePercent?: number;
-	cpuTemperatureC?: number;
+	/** ACPI thermal zone, not the CPU package sensor — it reflects chassis/system heat. */
+	systemTemperatureC?: number;
 	memoryUsagePercent?: number;
 	diskUsagePercent?: number;
 	networkMbps?: number;
@@ -48,14 +51,13 @@ const EXEC_OPTIONS = {
 	windowsHide: true
 };
 
+// Counter *names* are localized, so CPU and network read the locale-independent CIM perf classes
+// instead of Get-Counter paths; those classes are also pre-formatted, avoiding a 1s sample per read.
 const POWERSHELL_SCRIPT = [
 	"$ErrorActionPreference = 'SilentlyContinue'",
-	"$cpu = $null",
-	"$cpuSample = Get-Counter -Counter '\\Processor(_Total)\\% Processor Time' -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue",
-	"if ($null -ne $cpuSample) { $cpu = $cpuSample.CounterSamples | Select-Object -First 1 -ExpandProperty CookedValue }",
-	"$thermal = $null",
-	"$thermalSample = Get-Counter -Counter '\\Thermal Zone Information(*)\\High Precision Temperature' -ErrorAction SilentlyContinue",
-	"if ($null -ne $thermalSample) { $thermal = $thermalSample.CounterSamples | Select-Object -First 1 -ExpandProperty CookedValue }",
+	"$cpu = Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter \"Name='_Total'\" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty PercentProcessorTime",
+	"$thermal = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty CurrentTemperature",
+	"if ($null -eq $thermal) { $thermalSample = Get-Counter -Counter '\\Thermal Zone Information(*)\\High Precision Temperature' -ErrorAction SilentlyContinue; if ($null -ne $thermalSample) { $thermal = $thermalSample.CounterSamples | Select-Object -First 1 -ExpandProperty CookedValue } }",
 	"$memory = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue | Select-Object -First 1",
 	"$memoryPercent = $null",
 	"if ($null -ne $memory -and [double]$memory.TotalVisibleMemorySize -gt 0) { $memoryPercent = 100 - (([double]$memory.FreePhysicalMemory / [double]$memory.TotalVisibleMemorySize) * 100) }",
@@ -64,9 +66,9 @@ const POWERSHELL_SCRIPT = [
 	"$diskFree = ($disks | Measure-Object -Property FreeSpace -Sum).Sum",
 	"$diskPercent = $null",
 	"if ([double]$diskSize -gt 0) { $diskPercent = 100 - (([double]$diskFree / [double]$diskSize) * 100) }",
-	"$networkSample = Get-Counter -Counter '\\Network Interface(*)\\Bytes Total/sec' -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue",
-	"$networkBytes = $null",
-	"if ($null -ne $networkSample) { $networkBytes = ($networkSample.CounterSamples | Measure-Object -Property CookedValue -Sum).Sum }",
+	// Loopback, tunnel, and virtual-switch adapters double-count the same traffic as their physical peer.
+	"$adapters = @(Get-CimInstance Win32_PerfFormattedData_Tcpip_NetworkInterface -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'Loopback|isatap|Teredo|Pseudo-Interface|vEthernet|Virtual' })",
+	"$networkBytes = ($adapters | Measure-Object -Property BytesTotalPersec -Sum).Sum",
 	"[pscustomobject]@{ cpuUsagePercent = $cpu; cpuTemperatureRaw = $thermal; memoryUsagePercent = $memoryPercent; diskUsagePercent = $diskPercent; networkBytesPerSec = $networkBytes } | ConvertTo-Json -Compress"
 ].join("; ");
 
@@ -134,7 +136,7 @@ export function parsePowerShellMetrics(stdout: string): Omit<SystemMetrics, "gpu
 	const rawTemperature = asFiniteNumber(payload.cpuTemperatureRaw);
 	return {
 		cpuUsagePercent: asPercent(payload.cpuUsagePercent),
-		cpuTemperatureC: rawTemperature === undefined ? undefined : asTemperature(rawTemperature / 10 - 273.15),
+		systemTemperatureC: rawTemperature === undefined ? undefined : asTemperature(rawTemperature / 10 - 273.15),
 		memoryUsagePercent: asPercent(payload.memoryUsagePercent),
 		diskUsagePercent: asPercent(payload.diskUsagePercent),
 		networkMbps: asRate(payload.networkBytesPerSec)
@@ -171,7 +173,7 @@ export function parseNvidiaMetrics(stdout: string): NvidiaGpuMetrics[] {
 
 export function selectSystemMetric(metrics: SystemMetrics, metric: SystemMetricKind, gpuIndex: number): SystemMetricReading {
 		if (metric === "cpu") {
-			return { value: metrics.cpuUsagePercent, unit: "percent", temperatureC: metrics.cpuTemperatureC };
+			return { value: metrics.cpuUsagePercent, unit: "percent", temperatureC: metrics.systemTemperatureC };
 		}
 		if (metric === "gpu") {
 			const gpu = metrics.gpus.find((candidate) => candidate.index === gpuIndex);

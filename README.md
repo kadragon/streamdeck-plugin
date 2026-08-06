@@ -15,15 +15,16 @@ is read from local files or native local commands; the plugin never calls an API
 
 The **System Monitor** action is Windows-only and hidden on macOS. Choose CPU, GPU, RAM, disk, network,
 GPU memory, or GPU power in the action's Property Inspector. GPU metrics use the selected NVIDIA GPU
-index. CPU and GPU temperatures tint the background; unavailable readings show `--` rather than zero.
-It reads CPU utilization and thermal-zone data through PowerShell `Get-Counter`, and reads local RAM,
-disk, and network values without an API. NVIDIA metrics come from:
+index. The system ACPI thermal zone (shown on the CPU key) and the GPU package temperature tint the
+background; unavailable readings show `--` rather than zero. The thermal zone reflects chassis heat,
+not the CPU package sensor. CPU utilization, RAM, disk, and network come from local Windows CIM
+performance classes without an API. NVIDIA metrics come from:
 
 ```text
 nvidia-smi.exe --query-gpu=index,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw --format=csv,noheader,nounits
 ```
 
-The NVIDIA driver must provide `nvidia-smi.exe` on PATH. The key refreshes every five seconds and
+The NVIDIA driver must provide `nvidia-smi.exe` on PATH. The key refreshes every fifteen seconds and
 refreshes again after system wake. Missing counters, an unavailable `nvidia-smi.exe`, and invalid
 readings show `--`; they are never displayed as zero. Available temperatures tint the background green
 below 60 C, amber from 60 through 79.9 C, and red at 80 C or higher.

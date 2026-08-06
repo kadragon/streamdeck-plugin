@@ -48,7 +48,11 @@ export class WarpUriLauncher extends SingletonAction<WarpUriSettings> {
 
 	async #refresh(target: KeyAction<WarpUriSettings>, settings: WarpUriSettings): Promise<void> {
 		const uri = normalizeWarpUri(settings.uri);
-		await target.setTitle("");
-		await target.setImage(renderWarpTabKey({ label: uri === undefined ? "WARP URI" : "WARP LINK" }));
+		try {
+			await target.setTitle("");
+			await target.setImage(renderWarpTabKey({ label: uri === undefined ? "WARP URI" : "WARP LINK" }));
+		} catch (error) {
+			streamDeck.logger.error("failed to render Warp URI key", error);
+		}
 	}
 }

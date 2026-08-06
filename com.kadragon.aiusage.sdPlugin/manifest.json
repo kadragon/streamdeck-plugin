@@ -48,7 +48,7 @@
 			"Name": "System Monitor",
 			"UUID": "com.kadragon.aiusage.system-monitor",
 			"Icon": "imgs/actions/usage/icon",
-			"Tooltip": "Shows selected local Windows system metric; CPU and GPU temperatures use the background color.",
+			"Tooltip": "Shows selected local Windows system metric; system thermal zone and GPU temperatures use the background color.",
 			"PropertyInspectorPath": "ui/system-monitor.html",
 			"Controllers": [
 				"Keypad",

@@ -40,7 +40,8 @@ export async function openWarpUri(value: unknown): Promise<void> {
 	}
 
 	if (process.platform === "win32") {
-		await execFileAsync("explorer.exe", [url], { timeout: OPEN_URI_TIMEOUT_MS, windowsHide: true });
+		// `start` hands the URI to the registered handler; explorer.exe exits nonzero even on success.
+		await execFileAsync("cmd.exe", ["/d", "/c", "start", "", url], { timeout: OPEN_URI_TIMEOUT_MS, windowsHide: true });
 		return;
 	}
 

@@ -14,7 +14,7 @@ test("Windows metric parsers validate optional fields and calculate GPU memory u
 		networkBytesPerSec: 12_500_000
 	}));
 	assert.equal(computer.cpuUsagePercent, 42.5);
-	assert.equal(Math.round(computer.cpuTemperatureC ?? 0), 60);
+	assert.equal(Math.round(computer.systemTemperatureC ?? 0), 60);
 	assert.equal(computer.networkMbps, 100);
 
 	const gpus = parseNvidiaMetrics("0, 75, 70, 4000, 8000, 120\n1, N/A, N/A, N/A, N/A, N/A");

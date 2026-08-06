@@ -31,17 +31,18 @@ The wrapper writes `~/.claude/ai-usage/claude.json` and `claude-history.jsonl`, 
 ### System Monitor
 
 The **System Monitor** action is Windows-only and is hidden on macOS. Choose CPU, GPU, RAM, disk, network,
-GPU memory, or GPU power in its Property Inspector. GPU metrics use the selected NVIDIA GPU index. CPU
-and GPU temperatures tint the key background; the other metrics use a neutral metric background.
-CPU utilization and high-precision thermal-zone temperature come from PowerShell `Get-Counter`; RAM,
-disk, and network values come from local Windows sources. NVIDIA utilization, temperature, memory, and
+GPU memory, or GPU power in its Property Inspector. GPU metrics use the selected NVIDIA GPU index. The
+system ACPI thermal zone (shown on the CPU key) and the GPU temperature tint the key background; the
+other metrics use a neutral metric background. CPU utilization, RAM, disk, and network values come from
+locale-independent CIM performance classes; the thermal zone comes from `MSAcpi_ThermalZoneTemperature`
+with a `Get-Counter` fallback and is a chassis sensor rather than the CPU package. NVIDIA utilization, temperature, memory, and
 power come from:
 
 ```text
 nvidia-smi.exe --query-gpu=index,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw --format=csv,noheader,nounits
 ```
 
-The key refreshes immediately when it appears, every five seconds while visible, and again after
+The key refreshes immediately when it appears, every fifteen seconds while visible, and again after
 system wake. If PowerShell counters, `nvidia-smi.exe`, or an individual reading is unavailable or
 invalid, that field shows `--` rather than zero. The key background is green below 60 C, amber from
 60 through 79.9 C, and red at 80 C or higher.
