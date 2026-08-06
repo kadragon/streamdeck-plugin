@@ -50,15 +50,6 @@ export type KeyFace = {
 	warn?: boolean;
 };
 
-export type AgentKeyFace = {
-	source: UsageSource;
-	tabNumber: number;
-	status?: "started" | "running" | "attention";
-	reason?: string;
-	/** Alternates the attention face so an active key visibly blinks. */
-	blinkOn?: boolean;
-};
-
 export type WarpTabKeyFace = {
 	/** Selected filename stem, or `undefined` while the property inspector has no selection. */
 	label?: string;
@@ -85,35 +76,6 @@ export function renderKey(face: KeyFace): string {
 ${face.stale ? `<circle cx="129" cy="24" r="4.5" fill="${STALE_COLOR}"/>` : ""}
 ${renderValue(hasReading, clamped, numberColor, face.stale === true)}
 ${renderCaption(face.caption ?? "", captionColor)}
-</g>
-</svg>`;
-
-	return `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
-}
-
-/**
- * Builds the fixed-slot agent attention face.
- *
- * The attention state alternates between a dark and an amber face; the action owns the timer so this
- * renderer remains pure and deterministic.
- */
-export function renderAgentKey(face: AgentKeyFace): string {
-	const brand = BRANDS[face.source];
-	const status = face.status === "attention" ? attentionLabel(face.reason) : face.status === "running" || face.status === "started" ? "RUNNING" : "READY";
-	const attention = face.status === "attention";
-	const blinkOn = face.blinkOn === true;
-	const background = attention && blinkOn ? "#5A2A13" : brand.backdrop;
-	const statusColor = attention ? (blinkOn ? "#FFD166" : "#E0A33E") : face.status === "running" || face.status === "started" ? brand.accent : "#9AA0A8";
-	const statusOpacity = attention && !blinkOn ? 0.7 : 1;
-
-	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
-<rect width="${SIZE}" height="${SIZE}" fill="${background}"/>
-<g font-family="${KEY_FONT_FAMILY}" text-anchor="middle">
-<text x="72" y="31" fill="${brand.accent}" font-size="17" font-weight="700" letter-spacing="1.5" opacity="${attention && !blinkOn ? 0.65 : 1}">${escapeText(brand.label)}</text>
-<text x="72" y="83" fill="${attention && blinkOn ? "#FFD166" : "#F2F4F7"}" font-size="48" font-weight="700" style="font-variant-numeric:tabular-nums">${escapeText(String(face.tabNumber))}</text>
-<text x="72" y="108" fill="${statusColor}" font-size="16" font-weight="700" letter-spacing="1" opacity="${statusOpacity}">${escapeText(status)}</text>
-<text x="72" y="130" fill="#9AA0A8" font-size="12" font-weight="600">${attention ? "PRESS TO FOCUS" : "WARP TAB"}</text>
-${attention ? `<circle cx="129" cy="24" r="4.5" fill="${blinkOn ? "#FFD166" : "#E0A33E"}" opacity="${blinkOn ? 1 : 0.55}"/>` : ""}
 </g>
 </svg>`;
 
@@ -175,14 +137,6 @@ function splitWarpTabLabel(value: string | undefined): string[] {
 	}
 
 	return lines.length > 0 ? lines : [normalized];
-}
-
-function attentionLabel(reason: string | undefined): string {
-	if (reason === "permission" || reason === "input" || reason === "elicitation") {
-		return "INPUT";
-	}
-
-	return "DONE";
 }
 
 /**

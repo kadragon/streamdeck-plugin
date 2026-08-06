@@ -13,7 +13,7 @@ The workflow will:
 - run for pull requests and pushes to `main`;
 - use Ubuntu with Node.js 24, matching the package runtime contract;
 - install exactly from `package-lock.json` with `npm ci`, using the npm cache;
-- run the canonical `npm run check` contract, covering type safety, golden-principle checks, Agent Attention smoke checks, and the Rollup build;
+- run the canonical `npm run check` contract, covering type safety, golden-principle checks, and the Rollup build;
 - validate the generated Stream Deck package after the build, including `manifest.json`'s `CodePath`, `bin/plugin.js`, and the emitted package metadata;
 - cancel stale runs for the same pull request or branch and grant the workflow only `contents: read` permissions.
 
@@ -50,10 +50,10 @@ Local verification remains `npm run check` followed by the package-output check.
 
 - Automatic publishing, release packaging, tag-based releases, or deployment.
 - Stream Deck CLI linking or remote `streamdeck validate` in GitHub-hosted runners.
-- A Windows/macOS runner matrix; platform-specific focus behavior remains a local/manual concern.
+- A Windows/macOS runner matrix; desktop UI validation remains a local/manual concern.
 - Dependency update automation, vulnerability scanning policy, and scheduled maintenance workflows.
 - Harness structural validation and sweep execution in GitHub Actions; these remain manual maintenance commands.
-- A new product test framework; existing typecheck, principle, smoke, and build checks remain the verification foundation.
+- A new product test framework; existing typecheck, principle, and build checks remain the verification foundation.
 
 ## Further Notes
 

@@ -16,10 +16,8 @@
 ```text
 src/plugin.ts                  # SDK registration and wake-up refresh
 src/actions/weekly-limit.ts    # Settings, lifecycle, ticker, source selection
-src/actions/agent-attention.ts # Fixed Warp slot settings, blink state, and focus press
 src/actions/warp-tab-config.ts # Dynamic Tab Config selection and URI launch
 src/render.ts                  # Pure SVG key-face rendering and time formatting
-src/agent-attention/           # Event contract, atomic spool monitor, state, and focus adapter
 src/warp/                       # Local Warp Tab Config discovery and URI normalization
 src/usage/types.ts             # Reading/sample contracts and no-data error
 src/usage/burn-rate.ts         # Reset-aware burn-rate projection
@@ -27,8 +25,6 @@ src/usage/claude.ts            # Claude snapshot/history file reader
 src/usage/codex.ts             # Codex rollout file reader and cache
 scripts/statusline-usage-snapshot.sh
                                # Claude status-line stdin -> local snapshot/history
-scripts/agent-wrap.mjs         # Interactive agent launcher with fixed slot/runtime metadata
-scripts/agent-event.mjs        # Claude/Codex hook adapter and atomic event publisher
 com.kadragon.aiusage.sdPlugin/
   manifest.json                # Stream Deck package contract
   ui/weekly-limit.html         # Property Inspector settings
@@ -51,8 +47,6 @@ plugin -> actions -> render
 ### Boundaries
 
 - `WeeklyLimit` is the only action-level coordinator for settings, refresh cadence, and key updates.
-- `AgentAttention` owns only Stream Deck lifecycle/rendering; event publication stays in the scripts and
-  the `src/agent-attention/` monitor/store boundary.
 - `WarpTabConfig` reads local Tab Config metadata for its Property Inspector and opens only validated
   `warp://tab_config/` or `warppreview://tab_config/` URIs on key press.
 - Usage readers return `UsageReading`; invalid or missing local data becomes `NoUsageDataError`.
@@ -62,11 +56,6 @@ plugin -> actions -> render
 ## Data Access
 
 The plugin makes no API calls. Claude data comes from `~/.claude/ai-usage/claude.json` and `claude-history.jsonl`; Codex data comes from `~/.codex/sessions/**/rollout-*.jsonl`. The shell wrapper creates the Claude files from status-line stdin and forwards the original payload to the configured status-line program.
-
-Agent attention also stays local: the wrapper and lifecycle hooks publish short JSON events into an atomic
-per-event spool. The plugin consumes those files while an Agent Attention key is visible. No assistant
-messages, terminal output, or credentials cross the event boundary. A configured slot is the identity
-contract; Warp session discovery is intentionally out of scope for v1.
 
 Warp Tab Config discovery also stays local. The action scans Warp's platform-specific `tab_configs`
 directory for `.toml` files, uses the filename stem as the launch identity, and reads only the optional
