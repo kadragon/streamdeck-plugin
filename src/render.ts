@@ -355,10 +355,30 @@ function renderSystemStatus(status: SystemMonitorFace["status"]): string {
 	return `<text x="72" y="132" fill="${color}" font-size="11" font-weight="600" letter-spacing="1">${label}</text>`;
 }
 
+/**
+ * Colour for one Usage Overview provider row.
+ *
+ * Shared by the key SVG and the Stream Deck+ dial feedback so the two faces cannot drift apart.
+ */
+export function overviewStateColor(provider: UsageOverviewProviderFace): string {
+	const brand = BRANDS[provider.source];
+	return provider.state === "warning" ? DANGER_COLOR : provider.state === "stale" ? STALE_COLOR : provider.state === "ready" ? brand.accent : SYSTEM_UNAVAILABLE_COLOR;
+}
+
+/** Short status caption for one provider row, or `""` when the reading needs no annotation. */
+export function overviewDetailLabel(provider: UsageOverviewProviderFace): string {
+	return provider.state === "stale" ? "STALE" : provider.detail === "no-burn" ? "NO RATE" : provider.detail === "no-reset" ? "NO RESET" : provider.state === "missing" ? "NO DATA" : "";
+}
+
+/** Brand accent colour for one usage source, used for the provider label on both faces. */
+export function overviewBrandAccent(source: UsageSource): string {
+	return BRANDS[source].accent;
+}
+
 function renderOverviewRow(provider: UsageOverviewProviderFace, y: number): string {
 	const brand = BRANDS[provider.source];
-	const color = provider.state === "warning" ? DANGER_COLOR : provider.state === "stale" ? STALE_COLOR : provider.state === "ready" ? brand.accent : SYSTEM_UNAVAILABLE_COLOR;
-	const detail = provider.state === "stale" ? "STALE" : provider.detail === "no-burn" ? "NO RATE" : provider.detail === "no-reset" ? "NO RESET" : provider.state === "missing" ? "NO DATA" : "";
+	const color = overviewStateColor(provider);
+	const detail = overviewDetailLabel(provider);
 	return `<line x1="10" y1="${y + 9}" x2="134" y2="${y + 9}" stroke="#22304A" stroke-width="1"/>
 <text x="14" y="${y}" fill="${brand.accent}" font-size="13" font-weight="700" letter-spacing="1">${escapeText(provider.source.toUpperCase())}</text>
 <text x="130" y="${y}" fill="${color}" font-size="22" font-weight="700" text-anchor="end" style="font-variant-numeric:tabular-nums">${escapeText(provider.text)}</text>

@@ -1,6 +1,6 @@
 {
     "name": "streamdeck-plugin",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "private": true,
     "description": "Stream Deck plugin showing AI usage, local Windows system metrics, and Warp launchers.",
     "scripts": {

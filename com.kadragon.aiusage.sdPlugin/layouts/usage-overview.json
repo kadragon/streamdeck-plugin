@@ -1,0 +1,93 @@
+{
+	"$schema": "https://schemas.elgato.com/streamdeck/plugins/layout.json",
+	"id": "usage-overview",
+	"items": [
+		{
+			"key": "mode",
+			"type": "text",
+			"rect": [0, 2, 200, 16],
+			"alignment": "center",
+			"color": "#F2F4F7",
+			"font": { "size": 12, "weight": 600 },
+			"value": "AI USAGE"
+		},
+		{
+			"key": "claude-label",
+			"type": "text",
+			"rect": [4, 22, 62, 18],
+			"alignment": "left",
+			"color": "#D97757",
+			"font": { "size": 13, "weight": 600 },
+			"value": "CLAUDE"
+		},
+		{
+			"key": "claude-value",
+			"type": "text",
+			"rect": [66, 20, 74, 22],
+			"alignment": "right",
+			"color": "#F2F4F7",
+			"font": { "size": 18, "weight": 700 },
+			"value": "--"
+		},
+		{
+			"key": "claude-detail",
+			"type": "text",
+			"rect": [4, 40, 62, 12],
+			"alignment": "left",
+			"color": "#6B7076",
+			"font": { "size": 9, "weight": 600 },
+			"value": ""
+		},
+		{
+			"key": "claude-bar",
+			"type": "bar",
+			"rect": [144, 26, 52, 10],
+			"subtype": 4,
+			"bar_bg_c": "#22304A",
+			"bar_border_c": "#22304A",
+			"bar_fill_c": "#D97757",
+			"border_w": 1,
+			"range": { "min": 0, "max": 100 },
+			"value": 0
+		},
+		{
+			"key": "codex-label",
+			"type": "text",
+			"rect": [4, 60, 62, 18],
+			"alignment": "left",
+			"color": "#10A37F",
+			"font": { "size": 13, "weight": 600 },
+			"value": "CODEX"
+		},
+		{
+			"key": "codex-value",
+			"type": "text",
+			"rect": [66, 58, 74, 22],
+			"alignment": "right",
+			"color": "#F2F4F7",
+			"font": { "size": 18, "weight": 700 },
+			"value": "--"
+		},
+		{
+			"key": "codex-detail",
+			"type": "text",
+			"rect": [4, 78, 62, 12],
+			"alignment": "left",
+			"color": "#6B7076",
+			"font": { "size": 9, "weight": 600 },
+			"value": ""
+		},
+		{
+			"key": "codex-bar",
+			"type": "bar",
+			"rect": [144, 64, 52, 10],
+			"subtype": 4,
+			"bar_bg_c": "#22304A",
+			"bar_border_c": "#22304A",
+			"bar_fill_c": "#10A37F",
+			"border_w": 1,
+			"range": { "min": 0, "max": 100 },
+			"value": 0
+		}
+	]
+}

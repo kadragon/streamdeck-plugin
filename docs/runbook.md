@@ -32,10 +32,12 @@ The wrapper writes `~/.claude/ai-usage/claude.json` and `claude-history.jsonl`, 
 
 The **System Monitor** action is Windows-only and is hidden on macOS. Choose CPU, GPU, RAM, disk, network,
 GPU memory, or GPU power in its Property Inspector. GPU metrics use the selected NVIDIA GPU index. The
-system ACPI thermal zone (shown on the CPU key) and the GPU temperature tint the key background; the
+CPU temperature (shown on the CPU key) and the GPU temperature tint the key background; the
 other metrics use a neutral metric background. CPU utilization, RAM, disk, and network values come from
-locale-independent CIM performance classes; the thermal zone comes from `MSAcpi_ThermalZoneTemperature`
-with a `Get-Counter` fallback and is a chassis sensor rather than the CPU package. NVIDIA utilization, temperature, memory, and
+locale-independent CIM performance classes. CPU temperature prefers the true package sensor published by
+LibreHardwareMonitor or OpenHardwareMonitor over WMI; with neither running it falls back to
+`MSAcpi_ThermalZoneTemperature` (plus a `Get-Counter` fallback), which is a chassis sensor rather than
+the CPU package. Neither monitor is bundled — install and run one to get the package reading. NVIDIA utilization, temperature, memory, and
 power come from:
 
 ```text
@@ -74,7 +76,9 @@ Add **Warp URI** for a validated `warp://` or `warppreview://` link such as `war
 - `npm run typecheck` exits 0.
 - `npm test` exits 0.
 - `npm run build` creates `com.kadragon.aiusage.sdPlugin/bin/plugin.js`.
-- `npm run check:package` exits 0 after the build and confirms the generated package entry point and metadata.
+- `npm run check:package` exits 0 after the build and confirms the generated package entry point and metadata,
+  and runs `streamdeck validate` over the package — the only check that rejects a custom encoder layout
+  whose item rects overlap, which would otherwise stop the dial from loading at runtime.
 - `streamdeck link` installs the package; press a configured key after the corresponding source has produced local data.
 
 ## Build and Check
@@ -85,7 +89,7 @@ Add **Warp URI** for a validated `warp://` or `warppreview://` link such as `war
 | `npm test` | Focused usage, metrics, and rendering tests |
 | `npm run build` | Rollup production bundle |
 | `npm run check:principles` | Golden-principle structural checks with agent-readable fixes |
-| `npm run check:package` | Manifest and generated Stream Deck package-output checks |
+| `npm run check:package` | Manifest, generated package output, and `streamdeck validate` (incl. custom layouts) |
 | `npm run check` | Typecheck, principle checks, and build |
 | `npm run watch` | Watch/rebuild and restart the linked plugin |
 | `streamdeck validate` | Remote Stream Deck package validation; requires network access |

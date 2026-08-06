@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,6 +40,21 @@ requireFile("bin/package.json");
 const generatedPackage = readJson(path.join(packageRoot, "bin", "package.json"), "bin/package.json");
 if (generatedPackage !== undefined && generatedPackage.type !== "module") {
 	failures.push("bin/package.json must declare type=module");
+}
+
+// Elgato's own validator is the only thing that checks the manifest against the current schema and
+// the custom encoder layouts for overlapping item rects — an overlap makes the dial refuse to load,
+// and nothing else in this repo would catch it.
+const validation = spawnSync("npx", ["streamdeck", "validate", "--no-update-check"], {
+	cwd: packageRoot,
+	encoding: "utf8",
+	shell: process.platform === "win32"
+});
+if (validation.error !== undefined) {
+	failures.push(`streamdeck validate could not run (${validation.error.message})`);
+} else if (validation.status !== 0) {
+	const detail = `${validation.stdout ?? ""}${validation.stderr ?? ""}`.trim();
+	failures.push(`streamdeck validate rejected the package:\n${detail}`);
 }
 
 if (failures.length > 0) {

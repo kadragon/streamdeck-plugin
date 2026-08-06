@@ -8,7 +8,7 @@ const execFileAsync = promisify(execFile);
 const POWERSHELL = "powershell.exe";
 const NVIDIA_SMI = "nvidia-smi.exe";
 const MAX_BUFFER = 32 * 1024;
-// One sample costs seconds (PowerShell start, CIM queries, the thermal-zone fallback, nvidia-smi),
+// One sample costs seconds (PowerShell start, CIM queries, the temperature fallback chain, nvidia-smi),
 // so the interval stays well above the sample cost to keep the monitor from loading the machine.
 const DEFAULT_SAMPLE_INTERVAL_MS = 15_000;
 
@@ -27,6 +27,11 @@ export type SystemMetrics = {
 	cpuUsagePercent?: number;
 	/** ACPI thermal zone, not the CPU package sensor — it reflects chassis/system heat. */
 	systemTemperatureC?: number;
+	/**
+	 * True CPU package temperature in °C, available only while LibreHardwareMonitor or
+	 * OpenHardwareMonitor is running with its WMI provider enabled.
+	 */
+	cpuPackageTemperatureC?: number;
 	memoryUsagePercent?: number;
 	diskUsagePercent?: number;
 	networkMbps?: number;
@@ -56,6 +61,11 @@ const EXEC_OPTIONS = {
 const POWERSHELL_SCRIPT = [
 	"$ErrorActionPreference = 'SilentlyContinue'",
 	"$cpu = Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter \"Name='_Total'\" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty PercentProcessorTime",
+	// LibreHardwareMonitor (and its OpenHardwareMonitor predecessor) publish the real CPU package
+	// sensor in °C over WMI, but only while running. The ACPI thermal zone below stays as the
+	// fallback for machines without either, where a chassis reading beats no reading at all.
+	"$package = $null",
+	"foreach ($ns in @('root/LibreHardwareMonitor','root/OpenHardwareMonitor')) { if ($null -ne $package) { continue }; $sensors = @(Get-CimInstance -Namespace $ns -ClassName Sensor -Filter \"SensorType='Temperature'\" -ErrorAction SilentlyContinue); if ($sensors.Count -eq 0) { continue }; $named = $sensors | Where-Object { $_.Name -match 'CPU Package|Tctl|Tdie' } | Select-Object -First 1; if ($null -ne $named) { $package = $named.Value } else { $cores = @($sensors | Where-Object { $_.Name -match '^CPU Core #\\d+$' }); if ($cores.Count -gt 0) { $package = ($cores | Measure-Object -Property Value -Average).Average } } }",
 	"$thermal = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty CurrentTemperature",
 	"if ($null -eq $thermal) { $thermalSample = Get-Counter -Counter '\\Thermal Zone Information(*)\\High Precision Temperature' -ErrorAction SilentlyContinue; if ($null -ne $thermalSample) { $thermal = $thermalSample.CounterSamples | Select-Object -First 1 -ExpandProperty CookedValue } }",
 	"$memory = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue | Select-Object -First 1",
@@ -69,7 +79,7 @@ const POWERSHELL_SCRIPT = [
 	// Loopback, tunnel, and virtual-switch adapters double-count the same traffic as their physical peer.
 	"$adapters = @(Get-CimInstance Win32_PerfFormattedData_Tcpip_NetworkInterface -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'Loopback|isatap|Teredo|Pseudo-Interface|vEthernet|Virtual' })",
 	"$networkBytes = ($adapters | Measure-Object -Property BytesTotalPersec -Sum).Sum",
-	"[pscustomobject]@{ cpuUsagePercent = $cpu; cpuTemperatureRaw = $thermal; memoryUsagePercent = $memoryPercent; diskUsagePercent = $diskPercent; networkBytesPerSec = $networkBytes } | ConvertTo-Json -Compress"
+	"[pscustomobject]@{ cpuUsagePercent = $cpu; cpuPackageTemperatureC = $package; cpuTemperatureRaw = $thermal; memoryUsagePercent = $memoryPercent; diskUsagePercent = $diskPercent; networkBytesPerSec = $networkBytes } | ConvertTo-Json -Compress"
 ].join("; ");
 
 /** Reads the local Windows sources used by System Monitor. */
@@ -137,6 +147,7 @@ export function parsePowerShellMetrics(stdout: string): Omit<SystemMetrics, "gpu
 	return {
 		cpuUsagePercent: asPercent(payload.cpuUsagePercent),
 		systemTemperatureC: rawTemperature === undefined ? undefined : asTemperature(rawTemperature / 10 - 273.15),
+		cpuPackageTemperatureC: asTemperature(payload.cpuPackageTemperatureC),
 		memoryUsagePercent: asPercent(payload.memoryUsagePercent),
 		diskUsagePercent: asPercent(payload.diskUsagePercent),
 		networkMbps: asRate(payload.networkBytesPerSec)
@@ -173,7 +184,8 @@ export function parseNvidiaMetrics(stdout: string): NvidiaGpuMetrics[] {
 
 export function selectSystemMetric(metrics: SystemMetrics, metric: SystemMetricKind, gpuIndex: number): SystemMetricReading {
 		if (metric === "cpu") {
-			return { value: metrics.cpuUsagePercent, unit: "percent", temperatureC: metrics.systemTemperatureC };
+			// Package sensor first; the ACPI chassis zone is only a stand-in when LHM/OHM is not running.
+			return { value: metrics.cpuUsagePercent, unit: "percent", temperatureC: metrics.cpuPackageTemperatureC ?? metrics.systemTemperatureC };
 		}
 		if (metric === "gpu") {
 			const gpu = metrics.gpus.find((candidate) => candidate.index === gpuIndex);

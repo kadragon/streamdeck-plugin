@@ -15,9 +15,10 @@ is read from local files or native local commands; the plugin never calls an API
 
 The **System Monitor** action is Windows-only and hidden on macOS. Choose CPU, GPU, RAM, disk, network,
 GPU memory, or GPU power in the action's Property Inspector. GPU metrics use the selected NVIDIA GPU
-index. The system ACPI thermal zone (shown on the CPU key) and the GPU package temperature tint the
-background; unavailable readings show `--` rather than zero. The thermal zone reflects chassis heat,
-not the CPU package sensor. CPU utilization, RAM, disk, and network come from local Windows CIM
+index. The CPU temperature (shown on the CPU key) and the GPU package temperature tint the
+background; unavailable readings show `--` rather than zero. The CPU key uses the true package sensor
+when LibreHardwareMonitor or OpenHardwareMonitor is running, and otherwise falls back to the ACPI
+thermal zone, which reflects chassis heat rather than the package. CPU utilization, RAM, disk, and network come from local Windows CIM
 performance classes without an API. NVIDIA metrics come from:
 
 ```text
