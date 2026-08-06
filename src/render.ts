@@ -303,6 +303,29 @@ export function formatSystemMetric(metric: SystemMetricKind, value: number | und
 	return `${Math.round(value)}%`;
 }
 
+/**
+ * Accent colour for one System Monitor reading.
+ *
+ * Shared by the key gauge and the Stream Deck+ dial bar so the two faces cannot drift apart.
+ */
+export function systemMonitorAccent(face: SystemMonitorFace): string {
+	return temperaturePalette(face.temperatureC, face.metric, face.status).accent;
+}
+
+/** Temperature caption for the dial's header row, or `""` when the metric reports none. */
+export function formatSystemTemperature(face: SystemMonitorFace): string {
+	if (!hasTemperatureChannel(face.metric) || face.status === "unsupported" || !isSystemTemperature(face.temperatureC)) {
+		return "";
+	}
+
+	return `${Math.round(face.temperatureC)}°C`;
+}
+
+/** Status caption shared by both faces, or `""` when the reading needs no annotation. */
+export function systemStatusLabel(status: SystemMonitorFace["status"]): string {
+	return status === undefined || status === "ready" ? "" : status === "unsupported" ? "UNSUPPORTED" : status === "stale" ? "STALE" : "NO DATA";
+}
+
 export function systemMetricProgress(metric: SystemMetricKind, value: number | undefined): number | undefined {
 	if (!isSystemValue(metric, value)) {
 		return undefined;
@@ -396,13 +419,13 @@ function renderSystemStatus(status: SystemMonitorFace["status"]): string {
 		return "";
 	}
 
-	const label = status === "unsupported" ? "UNSUPPORTED" : status === "stale" ? "STALE" : "NO DATA";
+	const label = systemStatusLabel(status);
 	const color = status === "stale" ? STALE_COLOR : SYSTEM_UNAVAILABLE_COLOR;
 	return `<text x="14" y="${SYSTEM_FOOTER_BASELINE}" fill="${color}" font-size="11" font-weight="600" text-anchor="start" letter-spacing="1">${label}</text>`;
 }
 
 /** Header text: the metric name, plus the GPU index when it is not the default one. */
-function systemHeaderLabel(metric: SystemMetricKind, gpuIndex: number | undefined): string {
+export function systemHeaderLabel(metric: SystemMetricKind, gpuIndex: number | undefined): string {
 	const label = systemMetricLabel(metric);
 	if (!isGpuScoped(metric) || typeof gpuIndex !== "number" || !Number.isInteger(gpuIndex) || gpuIndex <= 0) {
 		return label;

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isCurrentSystemMetricRevision } from "../src/actions/system-metrics";
+import { accumulateRotationSteps, isCurrentSystemMetricRevision } from "../src/actions/system-metrics";
+import { SYSTEM_METRIC_KINDS, stepSystemMetric } from "../src/metrics/types";
 import { createWindowsMetricsSampler, parseNvidiaMetrics, parsePowerShellMetrics, selectSystemMetric, type SystemMetrics } from "../src/metrics/windows";
 import { formatSystemMetric, systemMetricProgress } from "../src/render";
 
@@ -83,4 +84,31 @@ test("system monitor ignores an older asynchronous render after settings change"
 	assert.equal(isCurrentSystemMetricRevision(2, 1), false);
 	assert.equal(isCurrentSystemMetricRevision(2, 2), true);
 	assert.equal(isCurrentSystemMetricRevision(undefined, 1), false);
+});
+
+test("metric rotation wraps in both directions and recovers from an unknown metric", () => {
+	// A full turn in either direction must land back where it started, so the dial order and the
+	// Property Inspector's option order cannot drift apart unnoticed.
+	for (const metric of SYSTEM_METRIC_KINDS) {
+		assert.equal(stepSystemMetric(metric, SYSTEM_METRIC_KINDS.length), metric);
+		assert.equal(stepSystemMetric(stepSystemMetric(metric, 1), -1), metric);
+	}
+
+	assert.equal(stepSystemMetric("cpu", 1), SYSTEM_METRIC_KINDS[1]);
+	assert.equal(stepSystemMetric(SYSTEM_METRIC_KINDS[0], -1), SYSTEM_METRIC_KINDS[SYSTEM_METRIC_KINDS.length - 1]);
+	assert.equal(stepSystemMetric("not-a-metric", 0), SYSTEM_METRIC_KINDS[0]);
+	assert.equal(stepSystemMetric(undefined, 1), SYSTEM_METRIC_KINDS[1]);
+});
+
+test("dial rotation steps on accumulated ticks and restarts the count on reversal", () => {
+	// One detent is half a step, so a single tick only carries; the second tick commits the change.
+	assert.deepEqual(accumulateRotationSteps(0, 1), { steps: 0, remainder: 1 });
+	assert.deepEqual(accumulateRotationSteps(1, 1), { steps: 1, remainder: 0 });
+	assert.deepEqual(accumulateRotationSteps(0, 5), { steps: 2, remainder: 1 });
+	assert.deepEqual(accumulateRotationSteps(0, -2), { steps: -1, remainder: 0 });
+
+	// Turning back discards the carried tick instead of spending the reversal on cancelling it.
+	assert.deepEqual(accumulateRotationSteps(1, -1), { steps: 0, remainder: -1 });
+	assert.deepEqual(accumulateRotationSteps(3, 0), { steps: 0, remainder: 3 });
+	assert.deepEqual(accumulateRotationSteps(3, Number.NaN), { steps: 0, remainder: 3 });
 });

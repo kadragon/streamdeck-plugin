@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { renderKey, renderSystemMonitor, systemMetricProgress } from "../src/render";
+import { formatSystemTemperature, renderKey, renderSystemMonitor, systemMetricProgress, systemMonitorAccent, systemStatusLabel } from "../src/render";
 
 function decodeImage(image: string): string {
 	return decodeURIComponent(image.slice(image.indexOf(",") + 1));
@@ -53,4 +53,23 @@ test("header names the GPU index only when it is not the default GPU", () => {
 	assert.match(decodeImage(renderSystemMonitor({ metric: "gpu", value: 20, gpuIndex: 0 })), />GPU</);
 	assert.doesNotMatch(decodeImage(renderSystemMonitor({ metric: "gpu", value: 20, gpuIndex: 0 })), />GPU #/);
 	assert.doesNotMatch(decodeImage(renderSystemMonitor({ metric: "cpu", value: 20, gpuIndex: 2 })), />CPU #/);
+});
+
+test("dial and key faces share one status, temperature, and accent source", () => {
+	assert.equal(systemStatusLabel("ready"), "");
+	assert.equal(systemStatusLabel(undefined), "");
+	assert.equal(systemStatusLabel("stale"), "STALE");
+	assert.equal(systemStatusLabel("missing"), "NO DATA");
+	assert.equal(systemStatusLabel("unsupported"), "UNSUPPORTED");
+
+	assert.equal(formatSystemTemperature({ metric: "cpu", temperatureC: 71.4 }), "71°C");
+	assert.equal(formatSystemTemperature({ metric: "memory", temperatureC: 71 }), "");
+	assert.equal(formatSystemTemperature({ metric: "cpu", temperatureC: 900 }), "");
+	assert.equal(formatSystemTemperature({ metric: "cpu", temperatureC: 71, status: "unsupported" }), "");
+
+	// The accent the dial bar uses must be the same colour the key gauge draws.
+	const hot = systemMonitorAccent({ metric: "cpu", value: 90, temperatureC: 85 });
+	const cool = systemMonitorAccent({ metric: "cpu", value: 90, temperatureC: 40 });
+	assert.notEqual(hot, cool);
+	assert.match(decodeImage(renderSystemMonitor({ metric: "cpu", value: 90, temperatureC: 85 })), new RegExp(hot));
 });

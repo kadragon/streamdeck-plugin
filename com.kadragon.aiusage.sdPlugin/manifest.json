@@ -30,11 +30,11 @@
 				"Encoder"
 			],
 			"Encoder": {
-				"layout": "$B1",
+				"layout": "layouts/system-monitor.json",
 				"TriggerDescription": {
-					"Push": "No action",
-					"Rotate": "View metric",
-					"Touch": "View metric"
+					"Push": "Refresh now",
+					"Rotate": "Change metric",
+					"Touch": "Refresh now"
 				}
 			},
 			"OS": ["windows"],

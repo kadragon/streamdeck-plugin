@@ -51,6 +51,10 @@ a missing reading draws no fill at all, so it can never be read as a low value. 
 measured temperature is shown as a value and also tints the key background: green below 60 C, amber
 from 60 through 79.9 C, and red at 80 C or higher. A GPU index other than 0 is named in the header.
 
+On Stream Deck+, the action uses its own dial layout: turn the dial to change the displayed metric
+(two detents per step, wrapping in both directions, persisted to the action's settings), and push the
+dial or tap the touch strip to take a fresh reading immediately instead of waiting out the interval.
+
 ### Warp Tab Config launcher
 
 Add the **Warp Tab Config** action, choose one saved config in its Property Inspector, and press the key

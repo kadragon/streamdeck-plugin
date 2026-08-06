@@ -18,12 +18,11 @@ Spec: `docs/design/system-monitor-ux.md`. Ordered; A1 precedes B1.
 
 ### Track B — Dial interaction
 
-- [ ] [feat] B1 — Export the shared metric order from `src/metrics/types.ts` matching the Property Inspector's option order; test that forward rotation round-trips and backward is its inverse — `src/metrics/types.ts`, `test/metrics.test.ts`
-- [ ] [feat] B2 — Implement `onDialRotate` to cycle `metric` through `setSettings`, debounced by rotation ticks; the settings-revision guard must still drop stale async renders — `src/actions/system-metrics.ts`
-- [ ] [feat] B3 — Implement `onDialDown` and `onTouchTap` as a forced re-sample via `refreshAll({ force: true })`, each terminating its own promise chain with a logged `.catch` — `src/actions/system-metrics.ts`
-- [ ] [feat] B4 — Add `layouts/system-monitor.json` (200×100, non-overlapping rects: label, value, `bar` with explicit range, status/temperature line) and switch `setFeedbackLayout` off `$B1`; verify with `npm run check:package` — `com.kadragon.aiusage.sdPlugin/layouts/system-monitor.json`, `src/actions/system-metrics.ts`, `com.kadragon.aiusage.sdPlugin/manifest.json`
-- [ ] [feat] B5 — Rewrite `TriggerDescription` to the real behaviour (`Push: Refresh now`, `Rotate: Change metric`, `Touch: Refresh now`) and update `README.md` / `docs/runbook.md` — `com.kadragon.aiusage.sdPlugin/manifest.json`, `README.md`, `docs/runbook.md`
-- [ ] [fix] B0 (only if Track B is deferred) — Correct the advertised `TriggerDescription` to "No action" so the manifest stops promising behaviour the plugin does not implement — `com.kadragon.aiusage.sdPlugin/manifest.json`
+- [x] [feat] B1 — Export the shared metric order from `src/metrics/types.ts` matching the Property Inspector's option order; test that forward rotation round-trips and backward is its inverse — `src/metrics/types.ts`, `test/metrics.test.ts`
+- [x] [feat] B2 — Implement `onDialRotate` to cycle `metric` through `setSettings`, debounced by rotation ticks; the settings-revision guard must still drop stale async renders — `src/actions/system-metrics.ts`
+- [x] [feat] B3 — Implement `onDialDown` and `onTouchTap` as a forced re-sample via `refreshAll({ force: true })`, each terminating its own promise chain with a logged `.catch` — `src/actions/system-metrics.ts`
+- [x] [feat] B4 — Add `layouts/system-monitor.json` (200×100, non-overlapping rects: label, value, `bar` with explicit range, status/temperature line) and switch `setFeedbackLayout` off `$B1`; verify with `npm run check:package` — `com.kadragon.aiusage.sdPlugin/layouts/system-monitor.json`, `src/actions/system-metrics.ts`, `com.kadragon.aiusage.sdPlugin/manifest.json`
+- [x] [feat] B5 — Rewrite `TriggerDescription` to the real behaviour (`Push: Refresh now`, `Rotate: Change metric`, `Touch: Refresh now`) and update `README.md` / `docs/runbook.md` — `com.kadragon.aiusage.sdPlugin/manifest.json`, `README.md`, `docs/runbook.md`
 
 ## Deferred
 
