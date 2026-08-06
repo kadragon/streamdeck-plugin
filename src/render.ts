@@ -31,8 +31,43 @@ const SYSTEM_DANGER_BACKGROUND = "#5A1F2C";
 const SYSTEM_UNAVAILABLE_BACKGROUND = "#202D3B";
 const SYSTEM_MIN_PERCENT = 0;
 const SYSTEM_MAX_PERCENT = 100;
+
+/**
+ * Value that fills the gauge completely, per metric.
+ *
+ * Percent-native metrics are full at 100. Network and GPU power have no intrinsic ceiling, so these
+ * are display conventions rather than machine properties — one table so a rescale is one edit.
+ */
+const SYSTEM_METRIC_FULL_SCALE: Record<SystemMetricKind, number> = {
+	cpu: SYSTEM_MAX_PERCENT,
+	gpu: SYSTEM_MAX_PERCENT,
+	memory: SYSTEM_MAX_PERCENT,
+	disk: SYSTEM_MAX_PERCENT,
+	network: 1_000,
+	"gpu-memory": SYSTEM_MAX_PERCENT,
+	"gpu-power": 500
+};
+
 const SYSTEM_MIN_TEMPERATURE_C = -50;
 const SYSTEM_MAX_TEMPERATURE_C = 150;
+const SYSTEM_NEUTRAL_BACKGROUND = "#172235";
+const SYSTEM_NEUTRAL_COLOR = "#5E8CFF";
+
+/**
+ * Fixed vertical rhythm of the System Monitor key face: header, value, gauge, footer.
+ *
+ * The rows are constants rather than inline numbers because the four bands must stay clear of each
+ * other at every text size the auto-fit can produce.
+ */
+const SYSTEM_HEADER_BASELINE = 44;
+const SYSTEM_VALUE_BASELINE = 92;
+const SYSTEM_GAUGE_X = 22;
+const SYSTEM_GAUGE_Y = 104;
+const SYSTEM_GAUGE_WIDTH = 100;
+const SYSTEM_GAUGE_HEIGHT = 9;
+/** A reading of exactly zero still draws this much fill, so it cannot be mistaken for no reading. */
+const SYSTEM_GAUGE_MIN_FILL = 3;
+const SYSTEM_FOOTER_BASELINE = 131;
 
 /** Font used by key faces whose text is part of the rendered SVG rather than Stream Deck's title layer. */
 const KEY_FONT_FAMILY = "Segoe UI, Helvetica, Arial, sans-serif";
@@ -77,6 +112,8 @@ export type SystemMonitorFace = {
 	usagePercent?: number;
 	temperatureC?: number;
 	status?: "ready" | "missing" | "stale" | "unsupported";
+	/** Which NVIDIA GPU the reading came from; shown in the header only when it is not the default. */
+	gpuIndex?: number;
 };
 
 /**
@@ -108,20 +145,20 @@ ${renderCaption(face.caption ?? "", captionColor)}
 
 /** Builds a deterministic, local-only key face for the Windows System Monitor action. */
 export function renderSystemMonitor(face: SystemMonitorFace): string {
-	const metricLabel = systemMetricLabel(face.metric);
 	const value = face.value ?? face.usagePercent;
 	const usageColor = isSystemValue(face.metric, value) ? "#F2F4F7" : SYSTEM_UNAVAILABLE_COLOR;
 	const temperature = temperaturePalette(face.temperatureC, face.metric, face.status);
-	const usageMarkup = renderSystemValue(face.metric, value, face.unit, usageColor);
-	const statusMarkup = renderSystemStatus(face.status);
+	const headerLabel = systemHeaderLabel(face.metric, face.gpuIndex);
 
 	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
 <rect width="${SIZE}" height="${SIZE}" fill="${temperature.background}"/>
 <rect x="8" y="8" width="128" height="128" rx="14" fill="#0B1220" opacity="0.52" stroke="${temperature.accent}" stroke-width="2"/>
-<g font-family="${KEY_FONT_FAMILY}" text-anchor="middle">
-<text x="72" y="55" fill="#F2F4F7" font-size="22" font-weight="700" letter-spacing="1.5">${escapeText(metricLabel)}</text>
-${usageMarkup}
-${statusMarkup}
+<g font-family="${KEY_FONT_FAMILY}">
+<text x="72" y="${SYSTEM_HEADER_BASELINE}" fill="#F2F4F7" font-size="${fitFontSize(headerLabel.length, 21, 13)}" font-weight="700" text-anchor="middle" letter-spacing="1.2">${escapeText(headerLabel)}</text>
+${renderSystemValue(face.metric, value, face.unit, usageColor)}
+${renderSystemGauge(face.metric, value, temperature.accent)}
+${renderSystemStatus(face.status)}
+${renderSystemTemperature(face.metric, face.temperatureC, face.status)}
 </g>
 </svg>`;
 
@@ -271,8 +308,7 @@ export function systemMetricProgress(metric: SystemMetricKind, value: number | u
 		return undefined;
 	}
 
-	const maximum = metric === "network" ? 1_000 : metric === "gpu-power" ? 500 : SYSTEM_MAX_PERCENT;
-	return Math.max(0, Math.min(100, (value / maximum) * 100));
+	return Math.max(0, Math.min(100, (value / SYSTEM_METRIC_FULL_SCALE[metric]) * 100));
 }
 
 function isSystemValue(metric: SystemMetricKind, value: number | undefined): value is number {
@@ -296,13 +332,49 @@ function isInRange(value: number | undefined, minimum: number, maximum: number):
 
 function renderSystemValue(metric: SystemMetricKind, value: number | undefined, unit: SystemMonitorFace["unit"], color: string): string {
 	const formatted = formatSystemMetric(metric, value, unit);
-	const size = fitFontSize(formatted.length, 48, 28);
-	return `<text x="72" y="112" fill="${color}" font-size="${size}" font-weight="700" style="font-variant-numeric:tabular-nums" font-feature-settings="'tnum'">${escapeText(formatted)}</text>`;
+	const size = fitFontSize(formatted.length, 44, 24);
+	return `<text x="72" y="${SYSTEM_VALUE_BASELINE}" fill="${color}" font-size="${size}" font-weight="700" text-anchor="middle" style="font-variant-numeric:tabular-nums" font-feature-settings="'tnum'">${escapeText(formatted)}</text>`;
+}
+
+/**
+ * Draws the magnitude gauge: a track that is always present, and a fill only when there is a reading.
+ *
+ * A genuine zero still gets a minimum-width nub so it stays distinguishable from a missing reading,
+ * which draws no fill at all.
+ */
+function renderSystemGauge(metric: SystemMetricKind, value: number | undefined, accent: string): string {
+	const track = `<rect x="${SYSTEM_GAUGE_X}" y="${SYSTEM_GAUGE_Y}" width="${SYSTEM_GAUGE_WIDTH}" height="${SYSTEM_GAUGE_HEIGHT}" rx="${SYSTEM_GAUGE_HEIGHT / 2}" fill="#0B1220" stroke="#2A3A55" stroke-width="1"/>`;
+	const progress = systemMetricProgress(metric, value);
+	if (progress === undefined) {
+		return track;
+	}
+
+	const width = Math.max(SYSTEM_GAUGE_MIN_FILL, round((progress / 100) * SYSTEM_GAUGE_WIDTH));
+	return `${track}
+<rect x="${SYSTEM_GAUGE_X}" y="${SYSTEM_GAUGE_Y}" width="${width}" height="${SYSTEM_GAUGE_HEIGHT}" rx="${SYSTEM_GAUGE_HEIGHT / 2}" fill="${accent}"/>`;
+}
+
+/** Draws the measured temperature as a chip, on the metrics that carry one. */
+function renderSystemTemperature(metric: SystemMetricKind, value: number | undefined, status: SystemMonitorFace["status"]): string {
+	if (!hasTemperatureChannel(metric) || status === "unsupported" || !isSystemTemperature(value)) {
+		return "";
+	}
+
+	return `<text x="130" y="${SYSTEM_FOOTER_BASELINE}" fill="${temperatureColor(value)}" font-size="14" font-weight="700" text-anchor="end" style="font-variant-numeric:tabular-nums" font-feature-settings="'tnum'">${Math.round(value)}&#176;</text>`;
+}
+
+/** The metrics whose reading is accompanied by a temperature sensor. */
+function hasTemperatureChannel(metric: SystemMetricKind): boolean {
+	return metric === "cpu" || metric === "gpu";
+}
+
+function temperatureColor(value: number): string {
+	return value >= 80 ? DANGER_COLOR : value >= 60 ? SYSTEM_AMBER_COLOR : SYSTEM_GOOD_COLOR;
 }
 
 function temperaturePalette(value: number | undefined, metric: SystemMetricKind, status: SystemMonitorFace["status"]): { background: string; accent: string } {
-	if (metric !== "cpu" && metric !== "gpu") {
-		return { background: "#172235", accent: status === "unsupported" ? SYSTEM_UNAVAILABLE_COLOR : "#5E8CFF" };
+	if (!hasTemperatureChannel(metric)) {
+		return { background: SYSTEM_NEUTRAL_BACKGROUND, accent: status === "unsupported" ? SYSTEM_UNAVAILABLE_COLOR : SYSTEM_NEUTRAL_COLOR };
 	}
 	if (!isSystemTemperature(value) || status === "unsupported") {
 		return { background: SYSTEM_UNAVAILABLE_BACKGROUND, accent: SYSTEM_UNAVAILABLE_COLOR };
@@ -326,7 +398,21 @@ function renderSystemStatus(status: SystemMonitorFace["status"]): string {
 
 	const label = status === "unsupported" ? "UNSUPPORTED" : status === "stale" ? "STALE" : "NO DATA";
 	const color = status === "stale" ? STALE_COLOR : SYSTEM_UNAVAILABLE_COLOR;
-	return `<text x="72" y="132" fill="${color}" font-size="11" font-weight="600" letter-spacing="1">${label}</text>`;
+	return `<text x="14" y="${SYSTEM_FOOTER_BASELINE}" fill="${color}" font-size="11" font-weight="600" text-anchor="start" letter-spacing="1">${label}</text>`;
+}
+
+/** Header text: the metric name, plus the GPU index when it is not the default one. */
+function systemHeaderLabel(metric: SystemMetricKind, gpuIndex: number | undefined): string {
+	const label = systemMetricLabel(metric);
+	if (!isGpuScoped(metric) || typeof gpuIndex !== "number" || !Number.isInteger(gpuIndex) || gpuIndex <= 0) {
+		return label;
+	}
+
+	return `${label} #${gpuIndex}`;
+}
+
+function isGpuScoped(metric: SystemMetricKind): boolean {
+	return metric === "gpu" || metric === "gpu-memory" || metric === "gpu-power";
 }
 
 function systemMetricLabel(metric: SystemMetricKind): string {

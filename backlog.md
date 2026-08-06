@@ -10,11 +10,11 @@ Spec: `docs/design/system-monitor-ux.md`. Ordered; A1 precedes B1.
 
 ### Track A — Key face redesign
 
-- [ ] [feat] A1 — Move the `network`/`gpu-power` full-scale values out of `systemMetricProgress`'s inline ternaries into one named table; add tests for clamping, the `undefined` path, and each full-scale mapping — `src/render.ts`, `test/render.test.ts`
-- [ ] [feat] A2 — Draw the magnitude gauge under the value on every metric, fed by `systemMetricProgress`; a missing reading renders no fill, a genuine `0` renders as present — `src/render.ts`, `test/render.test.ts`
-- [ ] [feat] A3 — Render the temperature chip on `cpu`/`gpu` from `SystemMonitorFace.temperatureC`, colour-matched to the background thresholds; absent when out of range or on metrics with no temperature — `src/render.ts`, `test/render.test.ts`
-- [ ] [feat] A4 — Move the status badge into the gauge row and give non-temperature metrics one stable neutral backdrop distinct from the unavailable backdrop — `src/render.ts`, `test/render.test.ts`
-- [ ] [feat] A5 — Show the GPU index in the header band when the metric is GPU-scoped and the index is not 0 — `src/render.ts`, `src/actions/system-metrics.ts`, `test/render.test.ts`
+- [x] [feat] A1 — Move the `network`/`gpu-power` full-scale values out of `systemMetricProgress`'s inline ternaries into one named table; add tests for clamping, the `undefined` path, and each full-scale mapping — `src/render.ts`, `test/render.test.ts`
+- [x] [feat] A2 — Draw the magnitude gauge under the value on every metric, fed by `systemMetricProgress`; a missing reading renders no fill, a genuine `0` renders as present — `src/render.ts`, `test/render.test.ts`
+- [x] [feat] A3 — Render the temperature chip on `cpu`/`gpu` from `SystemMonitorFace.temperatureC`, colour-matched to the background thresholds; absent when out of range or on metrics with no temperature — `src/render.ts`, `test/render.test.ts`
+- [x] [feat] A4 — Move the status badge into the gauge row and give non-temperature metrics one stable neutral backdrop distinct from the unavailable backdrop — `src/render.ts`, `test/render.test.ts`
+- [x] [feat] A5 — Show the GPU index in the header band when the metric is GPU-scoped and the index is not 0 — `src/render.ts`, `src/actions/system-metrics.ts`, `test/render.test.ts`
 
 ### Track B — Dial interaction
 

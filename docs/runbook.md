@@ -46,8 +46,10 @@ nvidia-smi.exe --query-gpu=index,utilization.gpu,temperature.gpu,memory.used,mem
 
 The key refreshes immediately when it appears, every fifteen seconds while visible, and again after
 system wake. If PowerShell counters, `nvidia-smi.exe`, or an individual reading is unavailable or
-invalid, that field shows `--` rather than zero. The key background is green below 60 C, amber from
-60 through 79.9 C, and red at 80 C or higher.
+invalid, that field shows `--` rather than zero. A gauge under the value shows how full the metric is;
+a missing reading draws no fill at all, so it can never be read as a low value. On CPU and GPU the
+measured temperature is shown as a value and also tints the key background: green below 60 C, amber
+from 60 through 79.9 C, and red at 80 C or higher. A GPU index other than 0 is named in the header.
 
 ### Warp Tab Config launcher
 

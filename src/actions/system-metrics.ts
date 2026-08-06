@@ -153,7 +153,8 @@ export class SystemMonitor extends SingletonAction<SystemMonitorSettings> {
 			value: reading.value,
 			unit: reading.unit,
 			temperatureC: reading.temperatureC,
-			status
+			status,
+			gpuIndex
 		});
 
 		try {
