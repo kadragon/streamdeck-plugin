@@ -8,6 +8,8 @@
 - npm (`npm --version`)
 - Stream Deck CLI available as `streamdeck` for linking/validation
 - Bash and `jq` for the Claude status-line wrapper and harness scripts
+- Windows 10 or later for the System Monitor action
+- NVIDIA driver with `nvidia-smi.exe` available on PATH for GPU readings
 
 ### Setup
 
@@ -24,6 +26,22 @@ bash /c/dev/stream-deck-plugin/scripts/statusline-usage-snapshot.sh
 ```
 
 The wrapper writes `~/.claude/ai-usage/claude.json` and `claude-history.jsonl`, then forwards stdin to the latest `claude-hud` plugin when available.
+
+### System Monitor
+
+The **System Monitor** action is Windows-only. Choose CPU or GPU in its Property Inspector; the key shows
+only the selected utilization percentage, while the background color represents that metric's temperature.
+CPU utilization and high-precision thermal-zone temperature come from PowerShell `Get-Counter`; NVIDIA
+GPU utilization and temperature come from the first row of:
+
+```text
+nvidia-smi.exe --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits
+```
+
+The key refreshes immediately when it appears, every five seconds while visible, and again after
+system wake. If PowerShell counters, `nvidia-smi.exe`, or an individual reading is unavailable or
+invalid, that field shows `--` rather than zero. The key background is green below 60 C, amber from
+60 through 79.9 C, and red at 80 C or higher.
 
 ### Warp Tab Config launcher
 

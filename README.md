@@ -1,12 +1,31 @@
 # Stream Deck plugin
 
 A personal Stream Deck plugin bundling the keys I use while working with terminal AI agents. Everything
-is read from files the tools write locally; the plugin never calls an API.
+is read from local files or native local commands; the plugin never calls an API.
 
 | Action | What the key does |
 | --- | --- |
 | **Weekly Limit** | Shows how much of the weekly rate-limit allowance Claude Code or Codex CLI has consumed |
+| **System Monitor** | Shows local Windows CPU and NVIDIA GPU utilization and temperatures on one key |
 | **Warp Tab Config** | Opens one of Warp's saved Tab Configs |
+
+## System Monitor (Windows)
+
+The **System Monitor** action is Windows-only. Choose **CPU** or **GPU** in the action's Property
+Inspector. The key then shows only the selected utilization percentage; its background color represents
+that metric's temperature. It reads CPU utilization from the Windows performance
+counter `\Processor(_Total)\% Processor Time` and CPU thermal-zone data from
+`\Thermal Zone Information(*)\High Precision Temperature` through PowerShell `Get-Counter`. It reads the first NVIDIA
+GPU with:
+
+```text
+nvidia-smi.exe --query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits
+```
+
+The NVIDIA driver must provide `nvidia-smi.exe` on PATH. The key refreshes every five seconds and
+refreshes again after system wake. Missing counters, an unavailable `nvidia-smi.exe`, and invalid
+readings show `--`; they are never displayed as zero. Available temperatures tint the background green
+below 60 C, amber from 60 through 79.9 C, and red at 80 C or higher.
 
 ## Weekly Limit — where the numbers come from
 

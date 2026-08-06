@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+	<head lang="en">
+		<meta charset="utf-8" />
+		<!-- Vendored (sdpi-components v4.0.1) so the inspector works offline and pins the exact version. -->
+		<script src="sdpi-components.js"></script>
+	</head>
+	<body>
+		<sdpi-item label="Metric">
+			<sdpi-select setting="metric" default="cpu">
+				<option value="cpu">CPU</option>
+				<option value="gpu">GPU</option>
+			</sdpi-select>
+		</sdpi-item>
+		<p class="sdpi-info">
+			The key shows utilization as a percentage. Temperature is represented by the background color:
+			green below 60 C, amber from 60 through 79.9 C, and red at 80 C or higher.
+		</p>
+	</body>
+</html>
