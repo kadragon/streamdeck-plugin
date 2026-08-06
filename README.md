@@ -6,7 +6,6 @@ is read from files the tools write locally; the plugin never calls an API.
 | Action | What the key does |
 | --- | --- |
 | **Weekly Limit** | Shows how much of the weekly rate-limit allowance Claude Code or Codex CLI has consumed |
-| **Agent Attention** | Blinks when a wrapped agent session needs you, and focuses its Warp tab when pressed |
 | **Warp Tab Config** | Opens one of Warp's saved Tab Configs |
 
 ## Weekly Limit — where the numbers come from
@@ -91,42 +90,7 @@ press does not re-read. Defaults:
 Keys also refresh automatically when the machine wakes from sleep (`onSystemDidWakeUp`), since nothing
 is read while it is asleep.
 
-## Agent attention for Warp
-
-The **Agent Attention** action blinks when a wrapped Claude Code or Codex CLI session finishes a turn or
-waits for input, then focuses a configured Warp tab when pressed. Choose the source that matches the
-wrapped process; v1 does not auto-detect it. This first version uses fixed tab positions 1-8 in one
-Warp window; it does not discover or track tabs after they are reordered.
-
-### Start an agent through the wrapper
-
-Use the same tab number configured on the Stream Deck key. Keep the command after `--` so all of its
-arguments pass through unchanged:
-
-```powershell
-node C:/dev/stream-deck-plugin/scripts/agent-wrap.mjs --source claude --tab 3 -- claude
-node C:/dev/stream-deck-plugin/scripts/agent-wrap.mjs --source codex --tab 4 -- codex
-```
-
-The wrapper inherits the interactive terminal's stdio and publishes only local lifecycle metadata. It
-sets `AGENT_ATTENTION_RUNTIME_ID`, `AGENT_ATTENTION_TAB`, and `AGENT_ATTENTION_STATE_DIR` for the child
-so its hooks can associate events with the configured slot.
-
-### Configure hooks
-
-Merge the matching example into the tool's existing configuration; replace the placeholder script path:
-
-- Claude Code: `scripts/claude-agent-hooks.example.json` into `~/.claude/settings.json`
-- Codex CLI: `scripts/codex-agent-hooks.example.json` into `~/.codex/hooks.json` (or the active hooks config)
-
-The hook command must use the same `node` installation visible to the wrapped agent. Codex may ask you
-to review and trust the hook definitions before running them. Hooks without the wrapper's tab environment
-are intentionally ignored, so an unwrapped session cannot be assigned to the wrong key.
-
-Set `AGENT_ATTENTION_STATE_DIR` explicitly when the agent runs in WSL or another environment whose home
-directory differs from the Stream Deck process. The directory is local and contains short JSON event files;
-assistant messages and terminal output are never written there.
-
+## Launch a Warp Tab Config
 ## Launch a Warp Tab Config
 
 The **Warp Tab Config** action opens one of Warp's saved `.toml` Tab Configs from a Stream Deck key.
