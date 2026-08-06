@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 
 import { accumulateRotationSteps, isCurrentSystemMetricRevision } from "../src/actions/system-metrics";
@@ -86,9 +88,22 @@ test("system monitor ignores an older asynchronous render after settings change"
 	assert.equal(isCurrentSystemMetricRevision(undefined, 1), false);
 });
 
+test("the Property Inspector offers exactly the rotation order", async () => {
+	// The dial steps through SYSTEM_METRIC_KINDS while the inspector renders its own <option> list.
+	// Nothing but this test stops an edit to one from silently disagreeing with the other.
+	const inspector = await fs.readFile(
+		path.join(import.meta.dirname, "..", "com.kadragon.aiusage.sdPlugin", "ui", "system-monitor.html"),
+		"utf8"
+	);
+	const select = /<sdpi-select setting="metric"[\s\S]*?<\/sdpi-select>/.exec(inspector)?.[0];
+	assert.ok(select, "the metric selector is missing from the Property Inspector");
+
+	const options = [...select.matchAll(/<option value="([^"]+)"/g)].map((match) => match[1]);
+	assert.deepEqual(options, [...SYSTEM_METRIC_KINDS]);
+});
+
 test("metric rotation wraps in both directions and recovers from an unknown metric", () => {
-	// A full turn in either direction must land back where it started, so the dial order and the
-	// Property Inspector's option order cannot drift apart unnoticed.
+	// A full turn in either direction must land back where it started.
 	for (const metric of SYSTEM_METRIC_KINDS) {
 		assert.equal(stepSystemMetric(metric, SYSTEM_METRIC_KINDS.length), metric);
 		assert.equal(stepSystemMetric(stepSystemMetric(metric, 1), -1), metric);

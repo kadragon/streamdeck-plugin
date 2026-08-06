@@ -20,7 +20,7 @@ Redesign the 144×144 key face around a fixed vertical rhythm:
 - **Value line** — the formatted reading, auto-fitted as it is today. This remains the largest element.
 - **Magnitude gauge** — a horizontal bar under the value, filled by `systemMetricProgress`. It gives the peripheral-vision read the current face lacks, and it is drawn for every metric, not only the percent-native ones.
 - **Temperature chip** — a small right-aligned `NNc` chip on metrics that carry a temperature (`cpu`, `gpu`), replacing the discard of `reading.temperatureC`. The chip is colour-coded on the same thresholds as the background tint, so colour and number reinforce each other instead of colour standing alone.
-- **Status badge** — `NO DATA` / `STALE` / `UNSUPPORTED` moves into the gauge row and suppresses the gauge fill, so a missing reading can never present as a zero-length bar that reads like a real low value.
+- **Status badge** — `NO DATA` / `STALE` / `UNSUPPORTED` sits in the footer row beside the temperature chip. A missing or unsupported reading suppresses the gauge fill entirely, so it can never present as a zero-length bar that reads like a real low value; a stale reading keeps its fill but loses the ready accent and is dimmed on both the gauge and the value, matching how `renderKey` ages a stale number.
 
 Background tinting is kept but made consistent: temperature-bearing metrics keep the green/amber/red thresholds; every other metric gets one stable neutral backdrop, and the unavailable backdrop stays distinct from all of them.
 
@@ -53,9 +53,9 @@ Every rotation and push handler stays inside the existing containment rule: no S
 - **One source of scale.** `systemMetricProgress` is the single definition of "how full is this metric", consumed by both the key gauge and the dial bar. The dial does not compute its own percentage.
 - **Named full-scale table.** `network` (Mbps) and `gpu-power` (W) full-scale values become named constants in one table. Their current values (1000 and 500) are carried forward unchanged in this scope; changing them is a separate decision with its own evidence.
 - **Temperature is data, not only styling.** `SystemMonitorFace.temperatureC` is rendered as a value on temperature-bearing metrics and continues to drive the background tint. Out-of-range temperatures fall back to the unavailable palette and render no chip, per the existing `isSystemTemperature` guard.
-- **`not_observed != absent`.** A missing value renders `--` and a status badge with no gauge fill. Zero-length fill for a genuine zero is only drawn when the reading is present.
+- **`not_observed != absent`.** A missing value renders `--` and a status badge with no gauge fill. Zero-length fill for a genuine zero is only drawn when the reading is present. A stale reading is a third state: present, but dimmed and recoloured so it is never mistaken for a current one.
 - **Settings are the single state.** Dial rotation writes `metric` through `setSettings`; the action does not hold a second, dial-only notion of the current metric. The existing settings-revision guard continues to drop stale async renders after a change.
-- **Metric order is shared.** The rotation order is exported from `src/metrics/types.ts` and matches the Property Inspector's option order, so the two never diverge.
+- **Metric order is shared.** The rotation order is exported from `src/metrics/types.ts` and matches the Property Inspector's option order. A test parses the inspector's `<option>` values and asserts the two lists are equal, so the guarantee is mechanical rather than verbal.
 - **Custom dial layout.** `layouts/system-monitor.json` follows the Stream Deck layout schema, mirroring the item vocabulary (`text`, `bar` with an explicit `range`) proven by the removed usage-overview layout. `setFeedbackLayout` continues to be called before `setFeedback`.
 - **No new dependency, no network.** Both tracks are SVG string construction and SDK calls only.
 
@@ -67,7 +67,7 @@ Both tracks are verified by `node:test` through `tsx`, against pure functions �
 2. **Gauge fidelity.** Assert `systemMetricProgress` clamps to 0–100, returns `undefined` for an unusable reading, and maps the named full-scale values for `network` and `gpu-power`.
 3. **Temperature chip.** Assert the chip is present with an in-range temperature on `cpu`/`gpu`, absent out of range, and absent on metrics that carry no temperature.
 4. **Missing-vs-zero.** Assert a missing reading renders no gauge fill and that a genuine `0` does render as a present reading — the regression this design most needs to prevent.
-5. **Rotation order.** Assert the exported metric order round-trips: rotating forward through its full length returns to the starting metric, and rotating backward is its inverse.
+5. **Rotation order.** Assert the exported metric order round-trips: rotating forward through its full length returns to the starting metric, and rotating backward is its inverse. Separately assert that the Property Inspector's `<option>` values equal the exported order, so a future edit to either list fails the suite.
 6. **Dial layout.** `npm run check:package` runs `streamdeck validate` over the package, which rejects overlapping item rects in `layouts/system-monitor.json`.
 
 Manual verification, per `docs/runbook.md`: `streamdeck link`, then confirm on hardware that rotation changes the metric, push refreshes, and the advertised `TriggerDescription` matches observed behaviour.

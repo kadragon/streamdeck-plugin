@@ -73,3 +73,19 @@ test("dial and key faces share one status, temperature, and accent source", () =
 	assert.notEqual(hot, cool);
 	assert.match(decodeImage(renderSystemMonitor({ metric: "cpu", value: 90, temperatureC: 85 })), new RegExp(hot));
 });
+
+test("a stale reading is visibly aged on both the gauge and the value", () => {
+	const fresh = decodeImage(renderSystemMonitor({ metric: "cpu", value: 90, temperatureC: 40 }));
+	const stale = decodeImage(renderSystemMonitor({ metric: "cpu", value: 90, temperatureC: 40, status: "stale" }));
+	assert.notEqual(fresh, stale);
+
+	// The gauge keeps its magnitude but loses the ready accent and is dimmed, so an old value cannot
+	// be read as a current one on either face.
+	assert.match(stale, /opacity="0\.6"/);
+	assert.equal(systemMonitorAccent({ metric: "cpu", value: 90, temperatureC: 40, status: "stale" }), "#E0A33E");
+	assert.notEqual(
+		systemMonitorAccent({ metric: "cpu", value: 90, temperatureC: 40, status: "stale" }),
+		systemMonitorAccent({ metric: "cpu", value: 90, temperatureC: 40 })
+	);
+	assert.match(stale, /STALE/);
+});

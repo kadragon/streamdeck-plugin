@@ -54,11 +54,9 @@ plugin -> actions -> render
 ### Boundaries
 
 - `WeeklyLimit` is the only action-level coordinator for settings, refresh cadence, and key updates.
-- `UsageOverview` coordinates both local usage readers and keeps mode changes in action settings.
 - `SystemMonitor` is the Windows-only action-level coordinator for metric refresh and key/encoder updates.
 - `WarpTabConfig` reads local Tab Config metadata for its Property Inspector and opens only validated
   `warp://tab_config/` or `warppreview://tab_config/` URIs on key press.
-- `WarpUriLauncher` opens only validated `warp://` or `warppreview://` values supplied by the user.
 - Usage readers return `UsageReading`; invalid or missing local data becomes `NoUsageDataError`.
 - `renderKey` accepts a `KeyFace` and returns an SVG data URI; user-controlled caption text is escaped.
 - The Property Inspector sends settings through Stream Deck events; the ticker uses the latest event payload rather than polling IPC.

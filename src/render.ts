@@ -67,6 +67,8 @@ const SYSTEM_GAUGE_WIDTH = 100;
 const SYSTEM_GAUGE_HEIGHT = 9;
 /** A reading of exactly zero still draws this much fill, so it cannot be mistaken for no reading. */
 const SYSTEM_GAUGE_MIN_FILL = 3;
+/** Matches the dimming `renderKey` applies to a stale reading, so both key faces age the same way. */
+const SYSTEM_STALE_OPACITY = 0.6;
 const SYSTEM_FOOTER_BASELINE = 131;
 
 /** Font used by key faces whose text is part of the rendered SVG rather than Stream Deck's title layer. */
@@ -155,8 +157,8 @@ export function renderSystemMonitor(face: SystemMonitorFace): string {
 <rect x="8" y="8" width="128" height="128" rx="14" fill="#0B1220" opacity="0.52" stroke="${temperature.accent}" stroke-width="2"/>
 <g font-family="${KEY_FONT_FAMILY}">
 <text x="72" y="${SYSTEM_HEADER_BASELINE}" fill="#F2F4F7" font-size="${fitFontSize(headerLabel.length, 21, 13)}" font-weight="700" text-anchor="middle" letter-spacing="1.2">${escapeText(headerLabel)}</text>
-${renderSystemValue(face.metric, value, face.unit, usageColor)}
-${renderSystemGauge(face.metric, value, temperature.accent)}
+${renderSystemValue(face.metric, value, face.unit, usageColor, face.status)}
+${renderSystemGauge(face.metric, value, systemMonitorAccent(face), face.status)}
 ${renderSystemStatus(face.status)}
 ${renderSystemTemperature(face.metric, face.temperatureC, face.status)}
 </g>
@@ -309,7 +311,9 @@ export function formatSystemMetric(metric: SystemMetricKind, value: number | und
  * Shared by the key gauge and the Stream Deck+ dial bar so the two faces cannot drift apart.
  */
 export function systemMonitorAccent(face: SystemMonitorFace): string {
-	return temperaturePalette(face.temperatureC, face.metric, face.status).accent;
+	// A stale reading keeps its magnitude but loses the ready accent, so an old value can never be read
+	// as a current one on either face.
+	return face.status === "stale" ? STALE_COLOR : temperaturePalette(face.temperatureC, face.metric, face.status).accent;
 }
 
 /** Temperature caption for the dial's header row, or `""` when the metric reports none. */
@@ -353,10 +357,10 @@ function isInRange(value: number | undefined, minimum: number, maximum: number):
 	return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum;
 }
 
-function renderSystemValue(metric: SystemMetricKind, value: number | undefined, unit: SystemMonitorFace["unit"], color: string): string {
+function renderSystemValue(metric: SystemMetricKind, value: number | undefined, unit: SystemMonitorFace["unit"], color: string, status: SystemMonitorFace["status"]): string {
 	const formatted = formatSystemMetric(metric, value, unit);
 	const size = fitFontSize(formatted.length, 44, 24);
-	return `<text x="72" y="${SYSTEM_VALUE_BASELINE}" fill="${color}" font-size="${size}" font-weight="700" text-anchor="middle" style="font-variant-numeric:tabular-nums" font-feature-settings="'tnum'">${escapeText(formatted)}</text>`;
+	return `<text x="72" y="${SYSTEM_VALUE_BASELINE}" fill="${color}" font-size="${size}" font-weight="700" text-anchor="middle" opacity="${status === "stale" ? SYSTEM_STALE_OPACITY : 1}" style="font-variant-numeric:tabular-nums" font-feature-settings="'tnum'">${escapeText(formatted)}</text>`;
 }
 
 /**
@@ -365,7 +369,7 @@ function renderSystemValue(metric: SystemMetricKind, value: number | undefined, 
  * A genuine zero still gets a minimum-width nub so it stays distinguishable from a missing reading,
  * which draws no fill at all.
  */
-function renderSystemGauge(metric: SystemMetricKind, value: number | undefined, accent: string): string {
+function renderSystemGauge(metric: SystemMetricKind, value: number | undefined, accent: string, status: SystemMonitorFace["status"]): string {
 	const track = `<rect x="${SYSTEM_GAUGE_X}" y="${SYSTEM_GAUGE_Y}" width="${SYSTEM_GAUGE_WIDTH}" height="${SYSTEM_GAUGE_HEIGHT}" rx="${SYSTEM_GAUGE_HEIGHT / 2}" fill="#0B1220" stroke="#2A3A55" stroke-width="1"/>`;
 	const progress = systemMetricProgress(metric, value);
 	if (progress === undefined) {
@@ -374,7 +378,7 @@ function renderSystemGauge(metric: SystemMetricKind, value: number | undefined, 
 
 	const width = Math.max(SYSTEM_GAUGE_MIN_FILL, round((progress / 100) * SYSTEM_GAUGE_WIDTH));
 	return `${track}
-<rect x="${SYSTEM_GAUGE_X}" y="${SYSTEM_GAUGE_Y}" width="${width}" height="${SYSTEM_GAUGE_HEIGHT}" rx="${SYSTEM_GAUGE_HEIGHT / 2}" fill="${accent}"/>`;
+<rect x="${SYSTEM_GAUGE_X}" y="${SYSTEM_GAUGE_Y}" width="${width}" height="${SYSTEM_GAUGE_HEIGHT}" rx="${SYSTEM_GAUGE_HEIGHT / 2}" fill="${accent}" opacity="${status === "stale" ? SYSTEM_STALE_OPACITY : 1}"/>`;
 }
 
 /** Draws the measured temperature as a chip, on the metrics that carry one. */

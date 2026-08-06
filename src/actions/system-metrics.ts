@@ -91,9 +91,15 @@ export class SystemMonitor extends SingletonAction<SystemMonitorSettings> {
 			return;
 		}
 
+		// The event payload still carries the settings from before the previous rotation, because
+		// setSettings resolves when the message is sent rather than when the host has applied it. The
+		// local map is updated synchronously, so a fast turn must step from there or every event in the
+		// same round trip computes the same successor.
+		const base = this.#settings.get(ev.action.id) ?? ev.payload.settings;
+
 		// Each handler terminates its own promise chain: a rejected refresh must never surface as an
 		// unhandled rejection in the SDK callback.
-		this.#cycleMetric(ev.action, ev.payload.settings, steps).catch((err) =>
+		this.#cycleMetric(ev.action, base, steps).catch((err) =>
 			streamDeck.logger.error("failed to change system monitor metric", err)
 		);
 	}
