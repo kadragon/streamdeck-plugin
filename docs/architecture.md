@@ -79,7 +79,11 @@ That request is issued through `undici`'s `EnvHttpProxyAgent`, so it honours `HT
 and `NO_PROXY`. Node's global `fetch` ignores those variables unless the process was started with
 `NODE_USE_ENV_PROXY=1`, which a plugin cannot control; behind a proxy without the agent every request
 times out and the reading silently degrades to rollouts only. The agent is created once per process,
-because the endpoint is polled per refresh tick. `undici` is also why the manifest must pin Node.js 24 or
+because the endpoint is polled per refresh tick, and it pins HTTP/1.1 with `allowH2: false`: Rollup's
+CommonJS interop breaks `undici`'s internal `node:http2` binding, so a bundled h2 request fails with
+`http2.connect is not a function` and degrades to rollouts forever. That failure appears only in the
+built bundle — running the source directly negotiates h2 successfully — so the test suite, which injects
+its own transport, cannot observe it. `npm run check:principles` guards the option. `undici` is also why the manifest must pin Node.js 24 or
 newer — its cache store imports `node:sqlite`, and an older runtime fails to load the bundle at all.
 
 The shell wrapper creates the Claude files from status-line stdin and forwards the original payload to the configured status-line program.
