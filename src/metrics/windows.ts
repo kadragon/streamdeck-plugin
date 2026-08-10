@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import type { SystemMetricKind } from "./types";
+import { normalizeDiskDrive, type SystemMetricKind } from "./types";
 
 const execFileAsync = promisify(execFile);
 
@@ -22,6 +22,12 @@ export type NvidiaGpuMetrics = {
 	powerW?: number;
 };
 
+/** One fixed drive as reported by Win32_LogicalDisk, so a key can be scoped to a single volume. */
+export type SystemDiskMetrics = {
+	id: string;
+	usagePercent?: number;
+};
+
 export type SystemMetrics = {
 	sampledAt?: Date;
 	cpuUsagePercent?: number;
@@ -33,9 +39,11 @@ export type SystemMetrics = {
 	 */
 	cpuPackageTemperatureC?: number;
 	memoryUsagePercent?: number;
+	/** Aggregate usage across every fixed drive; the default reading for the `disk` metric. */
 	diskUsagePercent?: number;
 	networkMbps?: number;
 	gpus: NvidiaGpuMetrics[];
+	disks: SystemDiskMetrics[];
 };
 
 export type SystemMetricReading = {
@@ -76,10 +84,12 @@ const POWERSHELL_SCRIPT = [
 	"$diskFree = ($disks | Measure-Object -Property FreeSpace -Sum).Sum",
 	"$diskPercent = $null",
 	"if ([double]$diskSize -gt 0) { $diskPercent = 100 - (([double]$diskFree / [double]$diskSize) * 100) }",
+	// Per-drive rows let a key be scoped to one volume while the aggregate above stays the default.
+	"$diskRows = @($disks | ForEach-Object { $size = [double]$_.Size; $free = [double]$_.FreeSpace; $rowPercent = $null; if ($size -gt 0) { $rowPercent = 100 - (($free / $size) * 100) }; [pscustomobject]@{ id = $_.DeviceID; usagePercent = $rowPercent } })",
 	// Loopback, tunnel, and virtual-switch adapters double-count the same traffic as their physical peer.
 	"$adapters = @(Get-CimInstance Win32_PerfFormattedData_Tcpip_NetworkInterface -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'Loopback|isatap|Teredo|Pseudo-Interface|vEthernet|Virtual' })",
 	"$networkBytes = ($adapters | Measure-Object -Property BytesTotalPersec -Sum).Sum",
-	"[pscustomobject]@{ cpuUsagePercent = $cpu; cpuPackageTemperatureC = $package; cpuTemperatureRaw = $thermal; memoryUsagePercent = $memoryPercent; diskUsagePercent = $diskPercent; networkBytesPerSec = $networkBytes } | ConvertTo-Json -Compress"
+	"[pscustomobject]@{ cpuUsagePercent = $cpu; cpuPackageTemperatureC = $package; cpuTemperatureRaw = $thermal; memoryUsagePercent = $memoryPercent; diskUsagePercent = $diskPercent; disks = $diskRows; networkBytesPerSec = $networkBytes } | ConvertTo-Json -Compress -Depth 3"
 ].join("; ");
 
 /** Reads the local Windows sources used by System Monitor. */
@@ -110,17 +120,23 @@ export class WindowsMetricsSampler {
 		this.#intervalMs = intervalMs;
 	}
 
-	read(force = false): Promise<SystemMetrics> {
+	/**
+	 * @param maxAgeMs How old a settled sample may be before it is re-read; defaults to the
+	 * constructor interval. A configurable refresh rate has to pass its own value, otherwise a fast
+	 * ticker would keep re-rendering a sample the cache still considers fresh.
+	 */
+	read(force = false, maxAgeMs?: number): Promise<SystemMetrics> {
+		const maxAge = typeof maxAgeMs === "number" && Number.isFinite(maxAgeMs) && maxAgeMs > 0 ? maxAgeMs : this.#intervalMs;
 		const now = Date.now();
 		const current = this.#sample;
-		if (current !== undefined && (!current.settled || (!force && now - current.startedAt < this.#intervalMs))) {
+		if (current !== undefined && (!current.settled || (!force && now - current.startedAt < maxAge))) {
 			return current.promise;
 		}
 
 		const sample: { startedAt: number; settled: boolean; promise: Promise<SystemMetrics> } = {
 			startedAt: now,
 			settled: false,
-			promise: Promise.resolve({ gpus: [] })
+			promise: Promise.resolve({ gpus: [], disks: [] })
 		};
 		sample.promise = this.#reader().finally(() => {
 			sample.settled = true;
@@ -136,11 +152,11 @@ export function parsePowerShellMetrics(stdout: string): Omit<SystemMetrics, "gpu
 	try {
 		payload = JSON.parse(stdout.trim());
 	} catch {
-		return {};
+		return { disks: [] };
 	}
 
 	if (!isRecord(payload)) {
-		return {};
+		return { disks: [] };
 	}
 
 	const rawTemperature = asFiniteNumber(payload.cpuTemperatureRaw);
@@ -150,8 +166,22 @@ export function parsePowerShellMetrics(stdout: string): Omit<SystemMetrics, "gpu
 		cpuPackageTemperatureC: asTemperature(payload.cpuPackageTemperatureC),
 		memoryUsagePercent: asPercent(payload.memoryUsagePercent),
 		diskUsagePercent: asPercent(payload.diskUsagePercent),
+		disks: parseDiskRows(payload.disks),
 		networkMbps: asRate(payload.networkBytesPerSec)
 	};
+}
+
+/** Reads the per-drive rows; `ConvertTo-Json -Compress` collapses a single-drive array to one object. */
+function parseDiskRows(value: unknown): SystemDiskMetrics[] {
+	const rows = Array.isArray(value) ? value : isRecord(value) ? [value] : [];
+	return rows.flatMap((row) => {
+		if (!isRecord(row)) {
+			return [];
+		}
+
+		const id = typeof row.id === "string" ? row.id.trim() : "";
+		return id === "" ? [] : [{ id, usagePercent: asPercent(row.usagePercent) }];
+	});
 }
 
 /** Parses all NVIDIA rows so different visible keys can select different GPU indices. */
@@ -182,7 +212,7 @@ export function parseNvidiaMetrics(stdout: string): NvidiaGpuMetrics[] {
 		});
 }
 
-export function selectSystemMetric(metrics: SystemMetrics, metric: SystemMetricKind, gpuIndex: number): SystemMetricReading {
+export function selectSystemMetric(metrics: SystemMetrics, metric: SystemMetricKind, gpuIndex: number, diskDrive?: string): SystemMetricReading {
 		if (metric === "cpu") {
 			// Package sensor first; the ACPI chassis zone is only a stand-in when LHM/OHM is not running.
 			return { value: metrics.cpuUsagePercent, unit: "percent", temperatureC: metrics.cpuPackageTemperatureC ?? metrics.systemTemperatureC };
@@ -195,7 +225,15 @@ export function selectSystemMetric(metrics: SystemMetrics, metric: SystemMetricK
 			return { value: metrics.memoryUsagePercent, unit: "percent" };
 		}
 		if (metric === "disk") {
-			return { value: metrics.diskUsagePercent, unit: "percent" };
+			const scope = normalizeDiskDrive(diskDrive);
+			if (scope === undefined) {
+				return { value: metrics.diskUsagePercent, unit: "percent" };
+			}
+
+			// A drive that is no longer present leaves the value unavailable rather than silently
+			// falling back to the aggregate, which would misreport a scoped key as healthy.
+			const drive = metrics.disks.find((candidate) => normalizeDiskDrive(candidate.id) === scope);
+			return { value: drive?.usagePercent, unit: "percent" };
 		}
 		if (metric === "network") {
 			return { value: metrics.networkMbps, unit: "mbps" };
@@ -221,7 +259,7 @@ async function readComputerMetrics(): Promise<Omit<SystemMetrics, "gpus" | "samp
 		], EXEC_OPTIONS);
 		return parsePowerShellMetrics(stdout);
 	} catch {
-		return {};
+		return { disks: [] };
 	}
 }
 

@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
-import { accumulateRotationSteps, isCurrentSystemMetricRevision } from "../src/actions/system-metrics";
+import { accumulateRotationSteps, effectiveRefreshSeconds, isCurrentSystemMetricRevision, normalizeRefreshSeconds } from "../src/actions/system-metrics";
 import { SYSTEM_METRIC_KINDS, stepSystemMetric } from "../src/metrics/types";
 import { createWindowsMetricsSampler, parseNvidiaMetrics, parsePowerShellMetrics, selectSystemMetric, type SystemMetrics } from "../src/metrics/windows";
 import { formatSystemMetric, systemMetricProgress } from "../src/render";
@@ -66,7 +66,7 @@ test("system metric formatting and progress handle network units and unavailable
 
 test("Windows metrics sampler shares concurrent reads and respects interval cache", async () => {
 	let calls = 0;
-	const metrics: SystemMetrics = { gpus: [], sampledAt: new Date() };
+	const metrics: SystemMetrics = { gpus: [], disks: [], sampledAt: new Date() };
 	const sampler = createWindowsMetricsSampler(async () => {
 		calls += 1;
 		await Promise.resolve();
@@ -80,6 +80,89 @@ test("Windows metrics sampler shares concurrent reads and respects interval cach
 	assert.equal(calls, 1);
 	await sampler.read(true);
 	assert.equal(calls, 2);
+
+	// A configured refresh faster than the constructor interval must not keep serving the cached sample.
+	await new Promise((resolve) => setTimeout(resolve, 5));
+	await sampler.read(false, 1);
+	assert.equal(calls, 3);
+	await sampler.read();
+	assert.equal(calls, 3);
+});
+
+test("the configured refresh interval accepts select strings and clamps out-of-range values", () => {
+	assert.equal(normalizeRefreshSeconds(30), 30);
+	assert.equal(normalizeRefreshSeconds("60"), 60);
+	assert.equal(normalizeRefreshSeconds(" 10 "), 10);
+	assert.equal(normalizeRefreshSeconds(1), 10);
+	assert.equal(normalizeRefreshSeconds(9_999), 120);
+
+	for (const bogus of [undefined, null, "", "fast", Number.NaN, Number.POSITIVE_INFINITY, {}]) {
+		assert.equal(normalizeRefreshSeconds(bogus), 15);
+	}
+});
+
+test("the shared ticker runs at the fastest configured interval and defaults only when unconfigured", () => {
+	// The default answers the empty set; folding it in as a seed would cap every result at 15s.
+	assert.equal(effectiveRefreshSeconds([]), 15);
+	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: "120" }]), 120);
+	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: "10" }]), 10);
+	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: 120 }]), 120);
+
+	// The fastest visible key wins, whichever order the map yields.
+	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: "60" }, { refreshSeconds: "10" }]), 10);
+	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: "10" }, { refreshSeconds: "60" }]), 10);
+
+	// A key that never chose an interval, or stored an unusable one, contributes the default.
+	assert.equal(effectiveRefreshSeconds([{ metric: "cpu" }]), 15);
+	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: "fast" }]), 15);
+	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: 9_999 }, { metric: "cpu" }]), 15);
+	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: "120" }, { metric: "cpu" }]), 15);
+});
+
+test("per-drive disk rows are validated and a single drive survives the JSON array collapse", () => {
+	const many = parsePowerShellMetrics(JSON.stringify({
+		diskUsagePercent: 60,
+		disks: [
+			{ id: "C:", usagePercent: 91 },
+			{ id: "D:", usagePercent: "42.5" },
+			{ id: "E:", usagePercent: 140 },
+			{ id: "", usagePercent: 10 },
+			{ id: 3, usagePercent: 10 },
+			"not-a-row"
+		]
+	}));
+	assert.deepEqual(many.disks, [
+		{ id: "C:", usagePercent: 91 },
+		{ id: "D:", usagePercent: 42.5 },
+		// An out-of-range percentage is dropped while the drive itself stays selectable.
+		{ id: "E:", usagePercent: undefined }
+	]);
+
+	// ConvertTo-Json -Compress emits a bare object when exactly one fixed drive exists.
+	const one = parsePowerShellMetrics(JSON.stringify({ disks: { id: "C:", usagePercent: 12 } }));
+	assert.deepEqual(one.disks, [{ id: "C:", usagePercent: 12 }]);
+	assert.deepEqual(parsePowerShellMetrics("not json").disks, []);
+	assert.deepEqual(parsePowerShellMetrics(JSON.stringify({ disks: 7 })).disks, []);
+});
+
+test("the disk metric can be scoped to one drive and reports nothing when it is gone", () => {
+	const metrics: SystemMetrics = {
+		gpus: [],
+		diskUsagePercent: 60,
+		disks: [{ id: "C:", usagePercent: 91 }, { id: "D:" }]
+	};
+
+	// No scope keeps the aggregate over every fixed drive.
+	assert.equal(selectSystemMetric(metrics, "disk", 0).value, 60);
+	assert.equal(selectSystemMetric(metrics, "disk", 0, "   ").value, 60);
+
+	// Stream Deck settings may carry a trailing separator or different casing than Win32_LogicalDisk.
+	assert.equal(selectSystemMetric(metrics, "disk", 0, "C:").value, 91);
+	assert.equal(selectSystemMetric(metrics, "disk", 0, "c:\\").value, 91);
+
+	// A drive that is present but unreadable, and one that is gone, both leave the value unavailable.
+	assert.equal(selectSystemMetric(metrics, "disk", 0, "D:").value, undefined);
+	assert.equal(selectSystemMetric(metrics, "disk", 0, "Z:").value, undefined);
 });
 
 test("system monitor ignores an older asynchronous render after settings change", () => {

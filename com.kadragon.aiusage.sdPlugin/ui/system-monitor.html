@@ -17,11 +17,23 @@
 				<option value="gpu-power">GPU power</option>
 			</sdpi-select>
 		</sdpi-item>
-		<sdpi-item label="GPU index">
+		<sdpi-item label="GPU index" id="gpu-index-item">
 			<sdpi-range setting="gpuIndex" default="0" min="0" max="8" step="1" showlabels>
 				<span slot="min">0</span>
 				<span slot="max">8</span>
 			</sdpi-range>
+		</sdpi-item>
+		<sdpi-item label="Drive" id="disk-drive-item">
+			<sdpi-select setting="diskDrive" datasource="systemMonitorDisks" show-refresh></sdpi-select>
+		</sdpi-item>
+		<sdpi-item label="Refresh">
+			<sdpi-select setting="refreshSeconds" default="15">
+				<option value="10">Every 10 seconds</option>
+				<option value="15">Every 15 seconds</option>
+				<option value="30">Every 30 seconds</option>
+				<option value="60">Every minute</option>
+				<option value="120">Every 2 minutes</option>
+			</sdpi-select>
 		</sdpi-item>
 		<p class="sdpi-info">
 			Choose a local Windows metric. GPU metrics use the selected NVIDIA GPU index, which is named
@@ -29,7 +41,31 @@
 			and GPU temperatures are shown as a value and also set the background color: green below 60
 			C, amber from 60 through 79.9 C, and red at 80 C or higher. The CPU key shows the true package temperature
 			while LibreHardwareMonitor or OpenHardwareMonitor is running; otherwise it falls back to
-			the ACPI thermal zone, which is a chassis sensor. Network is shown in Mbps.
+			the ACPI thermal zone, which is a chassis sensor. Network is shown in Mbps. Disk usage covers
+			every fixed drive unless a single drive is chosen, in which case the drive is named on the
+			key. The refresh interval is shared by every System Monitor key; the fastest one wins.
 		</p>
+		<script>
+			// sdpi-components renders into shadow DOM but exposes `value` on the host element and fires a
+			// plain "valuechange" event there, so scope-dependent rows can be toggled without polling.
+			(() => {
+				const metric = document.querySelector('sdpi-select[setting="metric"]');
+				const gpuItem = document.getElementById("gpu-index-item");
+				const diskItem = document.getElementById("disk-drive-item");
+				if (metric === null || gpuItem === null || diskItem === null) {
+					return;
+				}
+
+				const sync = () => {
+					// The value is undefined until the host delivers the settings; that is the cpu default.
+					const selected = metric.value ?? "cpu";
+					gpuItem.hidden = selected !== "gpu" && selected !== "gpu-memory" && selected !== "gpu-power";
+					diskItem.hidden = selected !== "disk";
+				};
+
+				metric.addEventListener("valuechange", sync);
+				sync();
+			})();
+		</script>
 	</body>
 </html>

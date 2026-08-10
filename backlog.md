@@ -2,7 +2,9 @@
 
 ## Review Backlog
 
-_No open items._
+### PR #10 — Property Inspector controls
+
+- [ ] [feat] Fire the `systemMonitorDisks` datasource only for a disk-scoped key — `hidden` hides the drive row but the select still mounts and requests its list on every inspector open, so `onSendToPlugin` awaits a metrics sample whose result is never shown. Toggle the `datasource` attribute from the visibility script instead of setting it in markup; needs the Stream Deck host to verify — `com.kadragon.aiusage.sdPlugin/ui/system-monitor.html`, `src/actions/system-metrics.ts`
 
 ## System Monitor UI/UX
 
@@ -26,6 +28,5 @@ Spec: `docs/design/system-monitor-ux.md`. Ordered; A1 precedes B1.
 
 ## Deferred
 
-- [ ] [feat] Property Inspector: conditional GPU-index visibility, configurable refresh interval, disk-drive selection — `com.kadragon.aiusage.sdPlugin/ui/system-monitor.html`
 - [ ] [feat] Investigate a live usage endpoint for the Claude source, as done for Codex via `wham/usage` — Claude Code persists no percentages of its own, so this needs a spike to find whether an equivalent endpoint and local credential exist — `src/usage/claude.ts`
 - [ ] [feat] Multi-metric key (2–3 readings on one 144×144 face) — rejected in the current spec on glanceability grounds; revisit only with hardware evidence
