@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- [done] Confine network egress and make the Codex usage fallback diagnosable (ai-usage-streamdeck v0.8.2) (2026-08-10) → docs/architecture.md
 - [done] Refresh Codex usage without a Codex turn (ai-usage-streamdeck v0.8.0) (2026-08-10) → docs/architecture.md
 
 - [done] Rework System Monitor UI/UX and drop AI Usage Overview and Warp URI (ai-usage-streamdeck v0.7.0) (2026-08-06) → docs/design/system-monitor-ux.md

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { currentWindowSamples } from "./burn-rate";
-import { fetchCodexUsage } from "./codex-api";
+import { fetchCodexUsage, type CodexApiFailure } from "./codex-api";
 import { NoUsageDataError, isUsagePercent, parseResetTimestamp, parseUsageTimestamp, type UsageReading, type UsageSample } from "./types";
 
 /** Number of minutes in the weekly rate-limit window Codex reports. */
@@ -48,14 +48,17 @@ let cached: { fingerprint: string; reading: UsageReading } | undefined;
  */
 export type CodexUsageOptions = {
 	/**
-	 * Caller's clock. The usage endpoint is only consulted when this is supplied, because its response
-	 * carries no observation time and a reader may not invent one.
+	 * Caller's clock, required because the usage endpoint's response carries no observation time and a
+	 * reader may not invent one. It is not optional: an omitted clock used to disable the endpoint
+	 * silently, with no type error and no log.
 	 */
-	now?: Date;
+	now: Date;
 	/** Credentials location and HTTP transport, overridden by tests so they never touch the network. */
 	authPath?: string;
 	fetchImpl?: typeof fetch;
 	timeoutMs?: number;
+	/** Reports why the endpoint produced no reading, once per live attempt; never on a cache hit. */
+	onFailure?: (failure: CodexApiFailure) => void;
 };
 
 /**
@@ -70,7 +73,7 @@ export type CodexUsageOptions = {
  */
 export async function readCodexUsage(
 	sessionsDir = path.join(os.homedir(), ".codex", "sessions"),
-	options: CodexUsageOptions = {}
+	options: CodexUsageOptions
 ): Promise<UsageReading> {
 	let rollout: UsageReading | undefined;
 	let rolloutError: unknown;
@@ -81,12 +84,15 @@ export async function readCodexUsage(
 	}
 
 	const now = options.now;
-	const api =
-		now === undefined
-			? undefined
-			: await fetchCodexUsage({ now, authPath: options.authPath, fetchImpl: options.fetchImpl, timeoutMs: options.timeoutMs });
+	const api = await fetchCodexUsage({
+		now,
+		authPath: options.authPath,
+		fetchImpl: options.fetchImpl,
+		timeoutMs: options.timeoutMs,
+		onFailure: options.onFailure
+	});
 
-	if (api !== undefined && now !== undefined) {
+	if (api !== undefined) {
 		// Every rollout observation is older than the endpoint's answer, so all of them — the latest
 		// included — become history behind it. Old ones are dropped: the endpoint reading is always dated
 		// to now, so nothing else marks the reading stale, and a days-old sample paired with a live one

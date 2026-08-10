@@ -39,9 +39,28 @@ function collectTypeScript(directory) {
 	return files;
 }
 
+/**
+ * The one source file allowed to open a socket. It holds the Codex OAuth bearer token, so every
+ * other network client added to src/ is a new way for that token to reach an unintended host.
+ */
+const NETWORK_EGRESS_FILE = path.join("src", "usage", "codex-api.ts");
+
+/**
+ * Call-shaped on purpose: a bare `fetch` would flag the legitimate `fetchImpl?: typeof fetch`
+ * injection points, which exist so tests never touch the network.
+ */
+const NETWORK_CLIENT_PATTERNS = [/\bfetch\s*\(/, /\baxios\b/, /\bhttp\.request\s*\(/, /\bnet\.connect\s*\(/, /from\s+"undici"/];
+
 const sourceFiles = collectTypeScript("src");
 for (const relativePath of sourceFiles) {
 	const content = read(relativePath);
+	if (relativePath !== NETWORK_EGRESS_FILE && NETWORK_CLIENT_PATTERNS.some((pattern) => pattern.test(content))) {
+		failures.push({
+			message: relativePath + " opens a network client outside " + NETWORK_EGRESS_FILE,
+			fix: "Route outbound requests through src/usage/codex-api.ts, the only file allowed to hold the Codex OAuth bearer token, or inject a transport the caller supplies.",
+			ref: "AGENTS.md"
+		});
+	}
 	if (relativePath.includes(path.join("src", "usage")) && /new Date\(\)/.test(content)) {
 		failures.push({
 			message: relativePath + " contains a no-argument Date fallback",
