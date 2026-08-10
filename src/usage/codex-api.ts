@@ -56,6 +56,41 @@ export type CodexApiUsage = {
 };
 
 /**
+ * Why one usage request produced no reading.
+ *
+ * Every failure still collapses to a rollout fallback, but the reason travels to the caller so a
+ * permanently broken endpoint is visible in the log instead of looking like a healthy rollout-only
+ * plugin. The status and message are carried because they are the two that distinguish a revoked
+ * token from a payload change from a blocked network.
+ */
+export type CodexApiFailure =
+	| { kind: "no-credentials" }
+	| { kind: "http-error"; status: number }
+	| { kind: "network-error"; message: string }
+	| { kind: "unreadable-body"; message: string }
+	| { kind: "invalid-body" };
+
+/**
+ * Flattens an error and its `cause` chain into one line.
+ *
+ * `undici` reports every transport failure as the same `TypeError: fetch failed` and puts the real
+ * reason — DNS, `ECONNREFUSED`, a TLS chain error, or the bundled `http2.connect` breakage — on
+ * `cause`. Reporting only the top message would make every network failure read identically, which
+ * is the silence this whole diagnostic path exists to end.
+ */
+function describeError(err: unknown): string {
+	const parts: string[] = [];
+	let current: unknown = err;
+
+	for (let depth = 0; current !== undefined && current !== null && depth < 4; depth += 1) {
+		parts.push(current instanceof Error ? current.message : String(current));
+		current = current instanceof Error ? (current as { cause?: unknown }).cause : undefined;
+	}
+
+	return parts.join(": ");
+}
+
+/**
  * Options for {@link fetchCodexUsage}.
  */
 export type CodexApiOptions = {
@@ -64,6 +99,13 @@ export type CodexApiOptions = {
 	authPath?: string;
 	fetchImpl?: typeof fetch;
 	timeoutMs?: number;
+	/**
+	 * Reports why a request produced no reading. Called once per live attempt, never on a cache hit,
+	 * so the existing backoff also caps how often a persistent failure is reported.
+	 *
+	 * This layer reads files and sockets only; the SDK logger belongs to the action that owns it.
+	 */
+	onFailure?: (failure: CodexApiFailure) => void;
 };
 
 /**
@@ -82,8 +124,11 @@ let proxyAgent: EnvHttpProxyAgent | undefined;
 
 /**
  * The transport used when the caller injects none: `undici`'s fetch bound to the shared proxy agent.
+ *
+ * Exported so the transport itself can be exercised: every other test injects `fetchImpl`, which
+ * leaves this wiring — the one part that has already broken in a bundle — covered only in production.
  */
-function defaultFetch(): typeof fetch {
+export function defaultFetch(): typeof fetch {
 	// `allowH2: false` is load-bearing, not a tuning knob. Rollup's CommonJS interop rewrites undici's
 	// internal `require("node:http2")` into a binding whose `connect` is undefined, so the moment TLS
 	// negotiates h2 the request dies with `TypeError: http2.connect is not a function` — swallowed here
@@ -161,14 +206,24 @@ function reuseWindowMs(failures: number): number {
  *
  * Every failure mode — missing credentials, non-200, network error, timeout, unparseable or invalid
  * body — collapses to `undefined` so the caller can fall back to the rollout files unchanged. This is
- * a best-effort freshness improvement, never a new way for a refresh to fail.
+ * a best-effort freshness improvement, never a new way for a refresh to fail. The reason is handed to
+ * {@link CodexApiOptions.onFailure} so the fallback is diagnosable rather than silent.
  */
 export async function fetchCodexUsage(options: CodexApiOptions): Promise<CodexApiUsage | undefined> {
 	if (cache !== undefined && options.now.getTime() - cache.at.getTime() < reuseWindowMs(cache.failures)) {
 		return cache.value;
 	}
 
-	const value = await requestCodexUsage(options);
+	const { value, failure } = await requestCodexUsage(options);
+	if (failure !== undefined) {
+		try {
+			options.onFailure?.(failure);
+		} catch {
+			// A diagnostics sink is not allowed to cost the caller its reading: throwing here would
+			// abandon the rollout fallback too, which is the very silence this reporting exists to end.
+		}
+	}
+
 	// A failure drops the previous value rather than re-serving it: it would be dated to the caller's
 	// clock, and reporting an old percentage as current is worse than falling back to the rollouts.
 	cache = { at: options.now, value, failures: value === undefined ? (cache?.failures ?? 0) + 1 : 0 };
@@ -176,12 +231,12 @@ export async function fetchCodexUsage(options: CodexApiOptions): Promise<CodexAp
 }
 
 /**
- * Performs one usage request, absorbing every failure into `undefined`.
+ * Performs one usage request, absorbing every failure into a reported reason.
  */
-async function requestCodexUsage(options: CodexApiOptions): Promise<CodexApiUsage | undefined> {
+async function requestCodexUsage(options: CodexApiOptions): Promise<{ value?: CodexApiUsage; failure?: CodexApiFailure }> {
 	const auth = await readCodexAuth(options.authPath ?? defaultAuthPath(), options.now);
 	if (auth === undefined) {
-		return undefined;
+		return { failure: { kind: "no-credentials" } };
 	}
 
 	const headers: Record<string, string> = {
@@ -193,12 +248,14 @@ async function requestCodexUsage(options: CodexApiOptions): Promise<CodexApiUsag
 		headers["chatgpt-account-id"] = auth.accountId;
 	}
 
-	let body: any;
+	// Each stage gets its own try, so a reason names the stage that actually failed: a body that will
+	// not parse is a payload problem, not an unreachable endpoint, and the two have different fixes.
+	let response: Response;
 	try {
 		// Building the default transport constructs a proxy agent, which throws on a malformed
 		// HTTP_PROXY value; inside the try that stays a fallback to the rollouts, not a failed refresh.
 		const doFetch = options.fetchImpl ?? defaultFetch();
-		const response = await doFetch(USAGE_URL, {
+		response = await doFetch(USAGE_URL, {
 			method: "GET",
 			headers,
 			// `authorization` is stripped across origins but `chatgpt-account-id` is not, so a redirect
@@ -206,28 +263,37 @@ async function requestCodexUsage(options: CodexApiOptions): Promise<CodexApiUsag
 			redirect: "error",
 			signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
 		});
-		if (!response.ok) {
-			// undici holds the connection until the body is read or collected; a token that 401s on every
-			// refresh would otherwise accumulate sockets.
-			await response.body?.cancel();
-			return undefined;
-		}
+	} catch (err) {
+		return { failure: { kind: "network-error", message: describeError(err) } };
+	}
 
+	if (!response.ok) {
+		// undici holds the connection until the body is read or collected; a token that 401s on every
+		// refresh would otherwise accumulate sockets. A cancel that rejects must not overwrite the
+		// status: the operator needs to know it was a 401, not that the endpoint was unreachable.
+		await response.body?.cancel().catch(() => undefined);
+		return { failure: { kind: "http-error", status: response.status } };
+	}
+
+	let body: any;
+	try {
 		body = await response.json();
-	} catch {
-		return undefined;
+	} catch (err) {
+		return { failure: { kind: "unreadable-body", message: describeError(err) } };
 	}
 
 	const weekly = pickWeeklyWindow(body?.rate_limit);
 	// A `null` percentage would otherwise pass an `=== undefined` guard and render as 0% — the one
 	// misreport a quota gauge must never make.
 	if (!isUsagePercent(weekly?.used_percent)) {
-		return undefined;
+		return { failure: { kind: "invalid-body" } };
 	}
 
 	return {
-		usedPercent: weekly.used_percent,
-		resetsAt: parseResetTimestamp(weekly.reset_at)
+		value: {
+			usedPercent: weekly.used_percent,
+			resetsAt: parseResetTimestamp(weekly.reset_at)
+		}
 	};
 }
 

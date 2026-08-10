@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -7,7 +9,7 @@ import test from "node:test";
 import { currentWindowSamples, projectExhaustion } from "../src/usage/burn-rate";
 import { readClaudeUsage } from "../src/usage/claude";
 import { readCodexUsage } from "../src/usage/codex";
-import { resetCodexUsageCache } from "../src/usage/codex-api";
+import { defaultFetch, resetCodexUsageCache, type CodexApiFailure } from "../src/usage/codex-api";
 import { NoUsageDataError, type UsageReading } from "../src/usage/types";
 
 test("Claude reader rejects invalid percentage, timestamp, and reset values", async () => {
@@ -60,7 +62,9 @@ test("Codex reader drops invalid observations and preserves valid reset time", a
 			record(20, "2026-08-06T12:00:00.000Z", Math.floor(Date.parse("2026-08-10T12:00:00.000Z") / 1000))
 		].join("\n"));
 
-		const reading = await readCodexUsage(directory);
+		// A path that does not exist keeps the endpoint out of a rollout-only case: with no readable
+		// credentials the reader never reaches the network.
+		const reading = await readCodexUsage(directory, { now: NOW, authPath: path.join(directory, "absent-auth.json") });
 		assert.equal(reading.usedPercent, 20);
 		assert.equal(reading.observedAt.toISOString(), "2026-08-06T12:00:00.000Z");
 		assert.equal(reading.resetsAt?.toISOString(), "2026-08-10T12:00:00.000Z");
@@ -101,10 +105,12 @@ async function writeRollout(directory: string, usedPercent: number, timestamp: s
 }
 
 /** A `fetch` stand-in that answers with a fixed status and body, recording calls and body cancellation. */
-function stubFetch(status: number, body: unknown): typeof fetch & { calls: number; bodyCancelled: boolean } {
-	const state = { calls: 0, bodyCancelled: false };
-	const impl = async (): Promise<Response> => {
+function stubFetch(status: number, body: unknown): typeof fetch & { calls: number; bodyCancelled: boolean; url?: string; init?: RequestInit } {
+	const state: { calls: number; bodyCancelled: boolean; url?: string; init?: RequestInit } = { calls: 0, bodyCancelled: false };
+	const impl = async (input: string, init: RequestInit): Promise<Response> => {
 		state.calls += 1;
+		state.url = input;
+		state.init = init;
 		return {
 			ok: status >= 200 && status < 300,
 			status,
@@ -115,7 +121,9 @@ function stubFetch(status: number, body: unknown): typeof fetch & { calls: numbe
 
 	Object.defineProperty(impl, "calls", { get: () => state.calls });
 	Object.defineProperty(impl, "bodyCancelled", { get: () => state.bodyCancelled });
-	return impl as unknown as typeof fetch & { calls: number; bodyCancelled: boolean };
+	Object.defineProperty(impl, "url", { get: () => state.url });
+	Object.defineProperty(impl, "init", { get: () => state.init });
+	return impl as unknown as typeof fetch & { calls: number; bodyCancelled: boolean; url?: string; init?: RequestInit };
 }
 
 /** Shifts the caller's clock, so cache and backoff behaviour can be tested without waiting. */
@@ -331,9 +339,184 @@ test("Codex API alone yields a reading when no rollout exists", async () => {
 		assert.equal(reading.usedPercent, 42);
 		assert.deepEqual(reading.history, []);
 
-		await assert.rejects(() => readCodexUsage(sessionsDir), NoUsageDataError);
+		// Without this the memoised success above is re-served and the rollout-only path is never taken.
+		resetCodexUsageCache();
+		await assert.rejects(
+			() => readCodexUsage(sessionsDir, { now: NOW, authPath: path.join(directory, "absent-auth.json") }),
+			NoUsageDataError
+		);
 	});
 });
+
+test("Codex API request carries the endpoint URL, the CLI's identity, and no cross-origin redirect", async () => {
+	await withCodexDirectory(async (directory) => {
+		const authPath = await writeAuth(directory, new Date("2026-08-20T00:00:00.000Z"));
+		await writeRollout(directory, 20, "2026-08-09T00:00:00.000Z");
+
+		const fetchImpl = stubFetch(200, usageBody({ primary: { used_percent: 42, limit_window_seconds: 604800 } }));
+		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl });
+
+		assert.equal(fetchImpl.url, "https://chatgpt.com/backend-api/wham/usage");
+		assert.equal(fetchImpl.init?.method, "GET");
+		// A redirect would hand `chatgpt-account-id` to whatever host answered; `authorization` is the
+		// only header the platform strips on its own.
+		assert.equal(fetchImpl.init?.redirect, "error");
+
+		const headers = fetchImpl.init?.headers as Record<string, string>;
+		assert.match(headers.authorization, /^Bearer header\./);
+		assert.equal(headers.originator, "codex_cli_rs");
+		assert.match(headers["User-Agent"], /^codex_cli_rs\//);
+		assert.equal(headers["chatgpt-account-id"], "acct-1");
+	});
+});
+
+test("Codex API omits the account header when auth.json carries no account id", async () => {
+	await withCodexDirectory(async (directory) => {
+		const authPath = path.join(directory, "auth.json");
+		await fs.writeFile(authPath, JSON.stringify({ tokens: { access_token: accessToken(new Date("2026-08-20T00:00:00.000Z")) } }));
+		await writeRollout(directory, 20, "2026-08-09T00:00:00.000Z");
+
+		const fetchImpl = stubFetch(200, usageBody({ primary: { used_percent: 42, limit_window_seconds: 604800 } }));
+		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl });
+
+		assert.equal((fetchImpl.init?.headers as Record<string, string>)["chatgpt-account-id"], undefined);
+	});
+});
+
+test("Codex API reports each failure reason once per live attempt, never on a cache hit", async () => {
+	await withCodexDirectory(async (directory) => {
+		const authPath = await writeAuth(directory, new Date("2026-08-20T00:00:00.000Z"));
+		await writeRollout(directory, 20, "2026-08-09T00:00:00.000Z");
+		const failures: CodexApiFailure[] = [];
+		const onFailure = (failure: CodexApiFailure): void => void failures.push(failure);
+
+		// An unreadable auth.json is reported as missing credentials, and the network is never reached.
+		const unusedFetch = stubFetch(200, usageBody({ primary: { used_percent: 42, limit_window_seconds: 604800 } }));
+		await readCodexUsage(directory, { now: NOW, authPath: path.join(directory, "absent-auth.json"), fetchImpl: unusedFetch, onFailure });
+		assert.deepEqual(failures, [{ kind: "no-credentials" }]);
+		assert.equal(unusedFetch.calls, 0);
+
+		resetCodexUsageCache();
+		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl: stubFetch(503, { detail: "unavailable" }), onFailure });
+		assert.deepEqual(failures.at(-1), { kind: "http-error", status: 503 });
+
+		// The status survives a body-cancel that rejects; the operator must still see the 401.
+		resetCodexUsageCache();
+		const uncancellable = (async () => ({
+			ok: false,
+			status: 401,
+			body: {
+				cancel: async () => {
+					throw new Error("stream already errored");
+				}
+			},
+			json: async () => ({})
+		})) as unknown as typeof fetch;
+		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl: uncancellable, onFailure });
+		assert.deepEqual(failures.at(-1), { kind: "http-error", status: 401 });
+
+		resetCodexUsageCache();
+		const throwing = (async () => {
+			throw new Error("The operation was aborted due to timeout");
+		}) as unknown as typeof fetch;
+		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl: throwing, onFailure });
+		assert.deepEqual(failures.at(-1), { kind: "network-error", message: "The operation was aborted due to timeout" });
+
+		// A cause chain is flattened, so undici's uniform `fetch failed` still names the real reason.
+		resetCodexUsageCache();
+		const wrapped = (async () => {
+			throw new TypeError("fetch failed", { cause: new Error("connect ECONNREFUSED 127.0.0.1:1") });
+		}) as unknown as typeof fetch;
+		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl: wrapped, onFailure });
+		assert.deepEqual(failures.at(-1), { kind: "network-error", message: "fetch failed: connect ECONNREFUSED 127.0.0.1:1" });
+
+		// A 200 whose body will not parse is a payload problem, not an unreachable endpoint.
+		resetCodexUsageCache();
+		const unparseable = (async () => ({
+			ok: true,
+			status: 200,
+			body: { cancel: async () => undefined },
+			json: async () => {
+				throw new SyntaxError("Unexpected token '<'");
+			}
+		})) as unknown as typeof fetch;
+		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl: unparseable, onFailure });
+		assert.deepEqual(failures.at(-1), { kind: "unreadable-body", message: "Unexpected token '<'" });
+
+		resetCodexUsageCache();
+		const nonsense = stubFetch(200, usageBody({ primary: { used_percent: null, limit_window_seconds: 604800 } }));
+		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl: nonsense, onFailure });
+		assert.deepEqual(failures.at(-1), { kind: "invalid-body" });
+
+		// The memoised failure stands for the backoff window, so the reason is not re-reported per tick.
+		const reported = failures.length;
+		await readCodexUsage(directory, { now: later(NOW, 30), authPath, fetchImpl: nonsense, onFailure });
+		assert.equal(failures.length, reported);
+	});
+});
+
+test("Codex API keeps its reading when the failure sink throws", async () => {
+	await withCodexDirectory(async (directory) => {
+		const authPath = await writeAuth(directory, new Date("2026-08-20T00:00:00.000Z"));
+		await writeRollout(directory, 20, "2026-08-09T00:00:00.000Z");
+
+		const reading = await readCodexUsage(directory, {
+			now: NOW,
+			authPath,
+			fetchImpl: stubFetch(401, { detail: "unauthorized" }),
+			onFailure: () => {
+				throw new Error("logger exploded");
+			}
+		});
+
+		assert.equal(reading.usedPercent, 20);
+	});
+});
+
+test("default transport issues a real request through the shared dispatcher", async () => {
+	// The module-level proxy agent is built on the first call and reads the proxy variables then, so a
+	// machine-wide HTTP_PROXY would otherwise swallow a request to a loopback server. Both spellings
+	// are set: undici resolves `no_proxy ?? NO_PROXY`, so a lowercase one on the host would win.
+	const previous = { upper: process.env.NO_PROXY, lower: process.env.no_proxy };
+	process.env.NO_PROXY = "127.0.0.1,localhost";
+	process.env.no_proxy = "127.0.0.1,localhost";
+
+	const received: { url?: string; header?: string } = {};
+	const server = http.createServer((req, res) => {
+		received.url = req.url;
+		received.header = req.headers.originator as string | undefined;
+		res.writeHead(200, { "content-type": "application/json" });
+		res.end(JSON.stringify({ ok: true }));
+	});
+
+	try {
+		await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+		const { port } = server.address() as AddressInfo;
+
+		const response = await defaultFetch()(`http://127.0.0.1:${port}/wham/usage`, {
+			method: "GET",
+			headers: { originator: "codex_cli_rs" }
+		});
+
+		assert.equal(response.status, 200);
+		assert.deepEqual(await response.json(), { ok: true });
+		assert.equal(received.url, "/wham/usage");
+		assert.equal(received.header, "codex_cli_rs");
+	} finally {
+		await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+		restoreEnv("NO_PROXY", previous.upper);
+		restoreEnv("no_proxy", previous.lower);
+	}
+});
+
+/** Puts one environment variable back, distinguishing "was unset" from "was empty". */
+function restoreEnv(name: string, value: string | undefined): void {
+	if (value === undefined) {
+		delete process.env[name];
+	} else {
+		process.env[name] = value;
+	}
+}
 
 test("burn projection ignores samples before the latest reset", () => {
 	const reading: UsageReading = {

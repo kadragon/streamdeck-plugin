@@ -13,6 +13,7 @@ import { formatCountdown, renderKey } from "../render";
 import { projectExhaustion } from "../usage/burn-rate";
 import { readClaudeUsage } from "../usage/claude";
 import { readCodexUsage } from "../usage/codex";
+import type { CodexApiFailure } from "../usage/codex-api";
 import { NoUsageDataError, type UsageReading, type UsageSource } from "../usage/types";
 
 /**
@@ -50,8 +51,31 @@ const DEFAULT_DASHBOARDS: Record<UsageSource, string> = {
  */
 const READERS: Record<UsageSource, (now: Date) => Promise<UsageReading>> = {
 	claude: () => readClaudeUsage(),
-	codex: (now) => readCodexUsage(undefined, { now })
+	codex: (now) => readCodexUsage(undefined, { now, onFailure: (failure) => streamDeck.logger.warn(usageEndpointMessage(failure)) })
 };
+
+/**
+ * Wording for a usage-endpoint failure.
+ *
+ * The endpoint falling back to the rollouts is not an error — the key still shows a reading — but it
+ * is silent, so a payload change or a revoked token would otherwise look like a healthy plugin
+ * forever. The reason is spelled out because each one has a different fix: re-run `codex` to renew
+ * credentials, wait out a 5xx, or update the reader for a changed payload.
+ */
+function usageEndpointMessage(failure: CodexApiFailure): string {
+	switch (failure.kind) {
+		case "no-credentials":
+			return "codex usage endpoint skipped: no usable credentials in auth.json; falling back to rollout files";
+		case "http-error":
+			return `codex usage endpoint returned HTTP ${failure.status}; falling back to rollout files`;
+		case "network-error":
+			return `codex usage endpoint unreachable: ${failure.message}; falling back to rollout files`;
+		case "unreadable-body":
+			return `codex usage endpoint answered with a body that would not parse: ${failure.message}; falling back to rollout files`;
+		case "invalid-body":
+			return "codex usage endpoint returned no usable weekly percentage; falling back to rollout files";
+	}
+}
 
 /**
  * Displays the share of the weekly rate-limit allowance a tool has already consumed.

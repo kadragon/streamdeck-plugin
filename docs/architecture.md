@@ -73,7 +73,14 @@ Claude data comes from `~/.claude/ai-usage/claude.json` and `claude-history.json
 https://chatgpt.com/backend-api/wham/usage`, the same request the Codex CLI polls — authorised with the
 user's own local credentials from `~/.codex/auth.json`. The endpoint supplies the current percentage and
 reset time, the rollouts supply the burn-rate history, and any endpoint failure (expired token, non-200,
-network error) falls back to the rollout-only reading. The plugin makes no other network calls.
+network error) falls back to the rollout-only reading. The plugin makes no other network calls, and
+`npm run check:principles` enforces that: `src/usage/codex-api.ts` is the only source file allowed to
+open a network client, because it is the only one holding the OAuth bearer token. The fallback is no
+longer silent — the reader hands the reason (`no-credentials`, `http-error`, `network-error`,
+`unreadable-body`, `invalid-body`) back to `src/actions/weekly-limit.ts`, which logs it through the
+SDK logger once per live attempt, so `src/usage/` still imports nothing from `@elgato/streamdeck`.
+Each stage of the request reports its own reason, and a `network-error` carries the flattened `cause`
+chain, because `undici` reports every transport failure as the same `TypeError: fetch failed`.
 
 That request is issued through `undici`'s `EnvHttpProxyAgent`, so it honours `HTTP_PROXY`, `HTTPS_PROXY`,
 and `NO_PROXY`. Node's global `fetch` ignores those variables unless the process was started with

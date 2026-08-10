@@ -20,6 +20,7 @@ Enforcement: `npm run check:principles`, `npm run typecheck`, build, CI, and QA 
 2. **Contain async failures** — SDK wake/ticker callbacks must catch and log rejected promises; no background rejection may terminate the plugin.
 3. **Build from source** — package output is generated from `src/`; edit source, manifest, or UI, then run `npm run build`.
 4. **Preserve evidence integrity** — `not_observed != absent`; write `[unknown — read {source} to verify]` instead of inventing values.
+5. **Confine outbound network access** — only `src/usage/codex-api.ts` may open a network client; it is the sole holder of the Codex OAuth bearer token.
 
 ## Delegation
 
