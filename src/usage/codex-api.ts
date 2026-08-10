@@ -22,6 +22,12 @@ const MIN_WINDOW_SECONDS = 86400;
 /** A refresh must never outlive its own tick, so the request is abandoned after this long. */
 const DEFAULT_TIMEOUT_MS = 5000;
 
+/** Shortest gap between two requests, whatever refresh interval the keys are set to. Codex CLI polls at this rate. */
+const MIN_REFETCH_MS = 60 * 1000;
+
+/** Ceiling on the failure backoff, so a recovered endpoint is picked up again within a quarter hour. */
+const MAX_BACKOFF_MS = 15 * 60 * 1000;
+
 /**
  * One window of the `rate_limit` object the usage endpoint returns.
  *
@@ -117,20 +123,61 @@ export async function readCodexAuth(authPath: string, now: Date): Promise<CodexA
 	return { accessToken, accountId: typeof accountId === "string" && accountId !== "" ? accountId : undefined };
 }
 
+/** The last outcome, so a key ticking every second does not authenticate against the endpoint every second. */
+let cache: { at: Date; value?: CodexApiUsage; failures: number } | undefined;
+
 /**
- * Reads the current weekly usage straight from the endpoint, or `undefined` when it cannot be trusted.
+ * Discards the memoised outcome.
+ *
+ * Exists for tests: the cache is module state, so without this one case's answer would leak into the next.
+ */
+export function resetCodexUsageCache(): void {
+	cache = undefined;
+}
+
+/**
+ * How long the previous outcome stands before the endpoint is asked again.
+ *
+ * A run of failures — a revoked token 401ing, or a 5xx — is not going to clear within a tick, so each
+ * consecutive one doubles the wait instead of hammering the endpoint at full refresh rate.
+ */
+function reuseWindowMs(failures: number): number {
+	return failures === 0 ? MIN_REFETCH_MS : Math.min(MIN_REFETCH_MS * 2 ** failures, MAX_BACKOFF_MS);
+}
+
+/**
+ * Reads the current weekly usage from the endpoint, or `undefined` when it cannot be trusted.
+ *
+ * The answer is memoised: keys tick once a second and may be configured to refresh far faster than the
+ * quota can move, so the request rate is pinned to {@link MIN_REFETCH_MS} — the interval the Codex CLI
+ * itself polls at — regardless of how often this is called. Reuse is judged against the caller's clock,
+ * never a wall clock, so the behaviour is deterministic under test.
  *
  * Every failure mode — missing credentials, non-200, network error, timeout, unparseable or invalid
  * body — collapses to `undefined` so the caller can fall back to the rollout files unchanged. This is
  * a best-effort freshness improvement, never a new way for a refresh to fail.
  */
 export async function fetchCodexUsage(options: CodexApiOptions): Promise<CodexApiUsage | undefined> {
+	if (cache !== undefined && options.now.getTime() - cache.at.getTime() < reuseWindowMs(cache.failures)) {
+		return cache.value;
+	}
+
+	const value = await requestCodexUsage(options);
+	// A failure drops the previous value rather than re-serving it: it would be dated to the caller's
+	// clock, and reporting an old percentage as current is worse than falling back to the rollouts.
+	cache = { at: options.now, value, failures: value === undefined ? (cache?.failures ?? 0) + 1 : 0 };
+	return value;
+}
+
+/**
+ * Performs one usage request, absorbing every failure into `undefined`.
+ */
+async function requestCodexUsage(options: CodexApiOptions): Promise<CodexApiUsage | undefined> {
 	const auth = await readCodexAuth(options.authPath ?? defaultAuthPath(), options.now);
 	if (auth === undefined) {
 		return undefined;
 	}
 
-	const doFetch = options.fetchImpl ?? defaultFetch();
 	const headers: Record<string, string> = {
 		authorization: `Bearer ${auth.accessToken}`,
 		originator: ORIGINATOR,
@@ -142,12 +189,21 @@ export async function fetchCodexUsage(options: CodexApiOptions): Promise<CodexAp
 
 	let body: any;
 	try {
+		// Building the default transport constructs a proxy agent, which throws on a malformed
+		// HTTP_PROXY value; inside the try that stays a fallback to the rollouts, not a failed refresh.
+		const doFetch = options.fetchImpl ?? defaultFetch();
 		const response = await doFetch(USAGE_URL, {
 			method: "GET",
 			headers,
+			// `authorization` is stripped across origins but `chatgpt-account-id` is not, so a redirect
+			// would hand the account id to whatever host answered. The endpoint has no reason to redirect.
+			redirect: "error",
 			signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
 		});
 		if (!response.ok) {
+			// undici holds the connection until the body is read or collected; a token that 401s on every
+			// refresh would otherwise accumulate sockets.
+			await response.body?.cancel();
 			return undefined;
 		}
 

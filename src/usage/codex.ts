@@ -88,14 +88,23 @@ export async function readCodexUsage(
 
 	if (api !== undefined && now !== undefined) {
 		// Every rollout observation is older than the endpoint's answer, so all of them — the latest
-		// included — become history behind it.
+		// included — become history behind it. Old ones are dropped: the endpoint reading is always dated
+		// to now, so nothing else marks the reading stale, and a days-old sample paired with a live one
+		// would produce a confident burn rate across a reset the monotonic heuristic cannot see. No
+		// projection is the honest answer.
 		const history: UsageSample[] =
-			rollout === undefined ? [] : [...rollout.history, { at: rollout.observedAt, usedPercent: rollout.usedPercent }];
+			rollout === undefined
+				? []
+				: [...rollout.history, { at: rollout.observedAt, usedPercent: rollout.usedPercent }].filter(
+						(sample) => now.getTime() - sample.at.getTime() <= MAX_LOOKBACK_MS
+					);
 
-		// A missing reset time would cost more than the countdown caption: it is also the cutoff that keeps
-		// pre-reset samples out of the burn rate. The rollout's reset time describes the same window, so it
-		// stands in whenever the endpoint omits one.
-		return { usedPercent: api.usedPercent, resetsAt: api.resetsAt ?? rollout?.resetsAt, observedAt: now, history };
+		// The reset time only feeds the countdown caption. The rollout's copy describes the same window, so
+		// it stands in when the endpoint omits one — but only while it is still ahead of now: after a week
+		// of idle Codex it has already passed, and the caption would count down to zero and stay there.
+		const rolloutReset = rollout?.resetsAt !== undefined && rollout.resetsAt.getTime() > now.getTime() ? rollout.resetsAt : undefined;
+
+		return { usedPercent: api.usedPercent, resetsAt: api.resetsAt ?? rolloutReset, observedAt: now, history };
 	}
 
 	if (rollout === undefined) {

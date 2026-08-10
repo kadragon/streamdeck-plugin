@@ -7,6 +7,7 @@ import test from "node:test";
 import { currentWindowSamples, projectExhaustion } from "../src/usage/burn-rate";
 import { readClaudeUsage } from "../src/usage/claude";
 import { readCodexUsage } from "../src/usage/codex";
+import { resetCodexUsageCache } from "../src/usage/codex-api";
 import { NoUsageDataError, type UsageReading } from "../src/usage/types";
 
 test("Claude reader rejects invalid percentage, timestamp, and reset values", async () => {
@@ -99,16 +100,27 @@ async function writeRollout(directory: string, usedPercent: number, timestamp: s
 	}));
 }
 
-/** A `fetch` stand-in that answers with a fixed status and body, and records that it was called. */
-function stubFetch(status: number, body: unknown): typeof fetch & { calls: number } {
-	const state = { calls: 0 };
+/** A `fetch` stand-in that answers with a fixed status and body, recording calls and body cancellation. */
+function stubFetch(status: number, body: unknown): typeof fetch & { calls: number; bodyCancelled: boolean } {
+	const state = { calls: 0, bodyCancelled: false };
 	const impl = async (): Promise<Response> => {
 		state.calls += 1;
-		return { ok: status >= 200 && status < 300, status, json: async () => body } as Response;
+		return {
+			ok: status >= 200 && status < 300,
+			status,
+			body: { cancel: async () => void (state.bodyCancelled = true) },
+			json: async () => body
+		} as unknown as Response;
 	};
 
 	Object.defineProperty(impl, "calls", { get: () => state.calls });
-	return impl as unknown as typeof fetch & { calls: number };
+	Object.defineProperty(impl, "bodyCancelled", { get: () => state.bodyCancelled });
+	return impl as unknown as typeof fetch & { calls: number; bodyCancelled: boolean };
+}
+
+/** Shifts the caller's clock, so cache and backoff behaviour can be tested without waiting. */
+function later(from: Date, seconds: number): Date {
+	return new Date(from.getTime() + seconds * 1000);
 }
 
 /** The usage endpoint's response shape, with the windows the test cares about. */
@@ -118,6 +130,8 @@ function usageBody(windows: { primary?: unknown; secondary?: unknown }): unknown
 
 async function withCodexDirectory(body: (directory: string) => Promise<void>): Promise<void> {
 	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "streamdeck-codex-api-"));
+	// The API outcome is memoised in module state, so one case's answer would otherwise serve the next.
+	resetCodexUsageCache();
 	try {
 		await body(directory);
 	} finally {
@@ -128,7 +142,7 @@ async function withCodexDirectory(body: (directory: string) => Promise<void>): P
 test("Codex API reading wins over the rollout and keeps rollout observations as history", async () => {
 	await withCodexDirectory(async (directory) => {
 		const authPath = await writeAuth(directory, new Date("2026-08-20T00:00:00.000Z"));
-		await writeRollout(directory, 20, "2026-08-09T00:00:00.000Z");
+		await writeRollout(directory, 20, "2026-08-09T23:00:00.000Z");
 
 		const fetchImpl = stubFetch(200, usageBody({
 			primary: { used_percent: 42, limit_window_seconds: 604800, reset_at: Math.floor(Date.parse("2026-08-14T00:00:00.000Z") / 1000) }
@@ -138,7 +152,7 @@ test("Codex API reading wins over the rollout and keeps rollout observations as 
 		assert.equal(reading.usedPercent, 42);
 		assert.equal(reading.observedAt.getTime(), NOW.getTime());
 		assert.equal(reading.resetsAt?.toISOString(), "2026-08-14T00:00:00.000Z");
-		assert.deepEqual(reading.history, [{ at: new Date("2026-08-09T00:00:00.000Z"), usedPercent: 20 }]);
+		assert.deepEqual(reading.history, [{ at: new Date("2026-08-09T23:00:00.000Z"), usedPercent: 20 }]);
 	});
 });
 
@@ -154,6 +168,90 @@ test("Codex API reading keeps the rollout reset time when the endpoint omits one
 			assert.equal(reading.resetsAt?.toISOString(), "2026-08-13T00:00:00.000Z");
 		});
 	}
+});
+
+test("Codex API reading ignores a rollout reset time that has already passed", async () => {
+	await withCodexDirectory(async (directory) => {
+		const authPath = await writeAuth(directory, new Date("2026-08-20T00:00:00.000Z"));
+		await writeRollout(directory, 20, "2026-08-01T00:00:00.000Z", "2026-08-02T00:00:00.000Z");
+
+		const fetchImpl = stubFetch(200, usageBody({ primary: { used_percent: 42, limit_window_seconds: 604800 } }));
+		const reading = await readCodexUsage(directory, { now: NOW, authPath, fetchImpl });
+		assert.equal(reading.usedPercent, 42);
+		assert.equal(reading.resetsAt, undefined);
+	});
+});
+
+test("Codex API reading drops rollout samples older than the lookback window", async () => {
+	await withCodexDirectory(async (directory) => {
+		const authPath = await writeAuth(directory, new Date("2026-08-20T00:00:00.000Z"));
+		await writeRollout(directory, 20, "2026-08-04T00:00:00.000Z");
+
+		const fetchImpl = stubFetch(200, usageBody({ primary: { used_percent: 95, limit_window_seconds: 604800 } }));
+		const reading = await readCodexUsage(directory, { now: NOW, authPath, fetchImpl });
+		assert.equal(reading.usedPercent, 95);
+		assert.deepEqual(reading.history, []);
+		assert.equal(projectExhaustion(reading, NOW), undefined);
+	});
+});
+
+test("Codex API is re-polled at most once a minute", async () => {
+	await withCodexDirectory(async (directory) => {
+		const authPath = await writeAuth(directory, new Date("2026-08-20T00:00:00.000Z"));
+		await writeRollout(directory, 20, "2026-08-09T23:00:00.000Z");
+
+		const fetchImpl = stubFetch(200, usageBody({ primary: { used_percent: 42, limit_window_seconds: 604800 } }));
+		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl });
+		assert.equal(fetchImpl.calls, 1);
+
+		const cached = await readCodexUsage(directory, { now: later(NOW, 30), authPath, fetchImpl });
+		assert.equal(fetchImpl.calls, 1);
+		assert.equal(cached.usedPercent, 42);
+
+		await readCodexUsage(directory, { now: later(NOW, 61), authPath, fetchImpl });
+		assert.equal(fetchImpl.calls, 2);
+	});
+});
+
+test("Codex API backs off after a failure and cancels the unread body", async () => {
+	await withCodexDirectory(async (directory) => {
+		const authPath = await writeAuth(directory, new Date("2026-08-20T00:00:00.000Z"));
+		await writeRollout(directory, 20, "2026-08-09T23:00:00.000Z");
+
+		const fetchImpl = stubFetch(401, { detail: "unauthorized" });
+		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl });
+		assert.equal(fetchImpl.calls, 1);
+		assert.equal(fetchImpl.bodyCancelled, true);
+
+		// One failure doubles the wait, so a retry a minute later is still held back.
+		await readCodexUsage(directory, { now: later(NOW, 61), authPath, fetchImpl });
+		assert.equal(fetchImpl.calls, 1);
+
+		const reading = await readCodexUsage(directory, { now: later(NOW, 121), authPath, fetchImpl });
+		assert.equal(fetchImpl.calls, 2);
+		assert.equal(reading.usedPercent, 20);
+	});
+});
+
+test("Codex API falls back to the rollout when the proxy environment is malformed", async () => {
+	await withCodexDirectory(async (directory) => {
+		const authPath = await writeAuth(directory, new Date("2026-08-20T00:00:00.000Z"));
+		await writeRollout(directory, 20, "2026-08-09T23:00:00.000Z");
+
+		const previous = process.env.HTTPS_PROXY;
+		process.env.HTTPS_PROXY = "not a url";
+		try {
+			const reading = await readCodexUsage(directory, { now: NOW, authPath });
+			assert.equal(reading.usedPercent, 20);
+			assert.equal(reading.observedAt.toISOString(), "2026-08-09T23:00:00.000Z");
+		} finally {
+			if (previous === undefined) {
+				delete process.env.HTTPS_PROXY;
+			} else {
+				process.env.HTTPS_PROXY = previous;
+			}
+		}
+	});
 });
 
 test("Codex API picks the window closest to a week", async () => {
