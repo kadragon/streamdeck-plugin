@@ -116,6 +116,8 @@ export type SystemMonitorFace = {
 	status?: "ready" | "missing" | "stale" | "unsupported";
 	/** Which NVIDIA GPU the reading came from; shown in the header only when it is not the default. */
 	gpuIndex?: number;
+	/** Which fixed drive the disk reading is scoped to; blank means every fixed drive. */
+	diskDrive?: string;
 };
 
 /**
@@ -150,7 +152,7 @@ export function renderSystemMonitor(face: SystemMonitorFace): string {
 	const value = face.value ?? face.usagePercent;
 	const usageColor = isSystemValue(face.metric, value) ? "#F2F4F7" : SYSTEM_UNAVAILABLE_COLOR;
 	const temperature = temperaturePalette(face.temperatureC, face.metric, face.status);
-	const headerLabel = systemHeaderLabel(face.metric, face.gpuIndex);
+	const headerLabel = systemHeaderLabel(face.metric, face.gpuIndex, face.diskDrive);
 
 	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
 <rect width="${SIZE}" height="${SIZE}" fill="${temperature.background}"/>
@@ -428,14 +430,27 @@ function renderSystemStatus(status: SystemMonitorFace["status"]): string {
 	return `<text x="14" y="${SYSTEM_FOOTER_BASELINE}" fill="${color}" font-size="11" font-weight="600" text-anchor="start" letter-spacing="1">${label}</text>`;
 }
 
-/** Header text: the metric name, plus the GPU index when it is not the default one. */
-export function systemHeaderLabel(metric: SystemMetricKind, gpuIndex: number | undefined): string {
+/** Header text: the metric name, plus the GPU index or disk drive when the key is scoped to one. */
+export function systemHeaderLabel(metric: SystemMetricKind, gpuIndex: number | undefined, diskDrive?: string): string {
 	const label = systemMetricLabel(metric);
+	if (metric === "disk") {
+		const drive = formatDiskDrive(diskDrive);
+		return drive === undefined ? label : `${label} ${drive}`;
+	}
 	if (!isGpuScoped(metric) || typeof gpuIndex !== "number" || !Number.isInteger(gpuIndex) || gpuIndex <= 0) {
 		return label;
 	}
 
 	return `${label} #${gpuIndex}`;
+}
+
+function formatDiskDrive(value: string | undefined): string | undefined {
+	if (typeof value !== "string") {
+		return undefined;
+	}
+
+	const trimmed = value.trim().replace(/[\\/]+$/, "").toUpperCase();
+	return trimmed === "" ? undefined : trimmed;
 }
 
 function isGpuScoped(metric: SystemMetricKind): boolean {

@@ -9,10 +9,12 @@ import {
 	type DialUpEvent,
 	type KeyDownEvent,
 	type KeyAction,
+	type SendToPluginEvent,
 	type TouchTapEvent,
 	type WillAppearEvent,
 	type WillDisappearEvent
 } from "@elgato/streamdeck";
+import type { JsonValue } from "@elgato/utils";
 
 import {
 	createWindowsMetricsSampler,
@@ -32,9 +34,15 @@ import {
 	type SystemMonitorFace
 } from "../render";
 
-const REFRESH_INTERVAL_MS = 15_000;
+const DEFAULT_REFRESH_SECONDS = 15;
+const MIN_REFRESH_SECONDS = 5;
+// One sample costs seconds of PowerShell and nvidia-smi work, so the slowest cadence is capped well
+// below "never" while the fastest stays above the sample cost.
+const MAX_REFRESH_SECONDS = 300;
 const DEFAULT_METRIC: SystemMetricKind = "cpu";
 const DEFAULT_GPU_INDEX = 0;
+const DISK_DATA_SOURCE = "systemMonitorDisks";
+const ALL_DISKS_OPTION: DataSourceOption = { label: "All fixed drives", value: "" };
 /**
  * Rotation ticks that advance the metric by one.
  *
@@ -47,6 +55,21 @@ const DIAL_LAYOUT = "layouts/system-monitor.json";
 export type SystemMonitorSettings = {
 	metric?: SystemMetricKind;
 	gpuIndex?: number;
+	/** Seconds between ticker refreshes; a Property Inspector select yields this as a string. */
+	refreshSeconds?: number | string;
+	/** Fixed drive the `disk` metric is scoped to; blank or absent means every fixed drive. */
+	diskDrive?: string;
+};
+
+type DataSourceRequest = {
+	event?: string;
+	isRefresh?: boolean;
+};
+
+type DataSourceOption = {
+	label: string;
+	value: string;
+	disabled?: boolean;
 };
 
 type SystemMonitorAction = KeyAction<SystemMonitorSettings> | DialAction<SystemMonitorSettings>;
@@ -55,14 +78,15 @@ type SystemMonitorAction = KeyAction<SystemMonitorSettings> | DialAction<SystemM
 @action({ UUID: "com.kadragon.aiusage.system-monitor" })
 export class SystemMonitor extends SingletonAction<SystemMonitorSettings> {
 	#ticker?: NodeJS.Timeout;
+	#tickerIntervalMs?: number;
 	readonly #settings = new Map<string, SystemMonitorSettings>();
 	readonly #settingsRevision = new Map<string, number>();
 	readonly #rotation = new Map<string, number>();
 	readonly #sampler = createWindowsMetricsSampler();
 
 	override async onWillAppear(ev: WillAppearEvent<SystemMonitorSettings>): Promise<void> {
-		this.#startTicker();
 		const revision = this.#setSettings(ev.action.id, ev.payload.settings);
+		this.#syncTicker();
 		await this.#refresh(ev.action, ev.payload.settings, revision);
 	}
 
@@ -73,12 +97,40 @@ export class SystemMonitor extends SingletonAction<SystemMonitorSettings> {
 		// value an in-flight render from the previous appearance could still match.
 		if ([...this.actions].length === 0) {
 			this.#stopTicker();
+			return;
 		}
+
+		this.#syncTicker();
 	}
 
 	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<SystemMonitorSettings>): Promise<void> {
 		const revision = this.#setSettings(ev.action.id, ev.payload.settings);
+		this.#syncTicker();
 		await this.#refresh(ev.action, ev.payload.settings, revision);
+	}
+
+	override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, SystemMonitorSettings>): Promise<void> {
+		if (!isDataSourceRequest(ev.payload) || ev.payload.event !== DISK_DATA_SOURCE) {
+			return;
+		}
+
+		// The aggregate entry is supplied here rather than as an <option> child, because a datasource
+		// response replaces the child nodes of the select.
+		let items: DataSourceOption[] = [ALL_DISKS_OPTION];
+		try {
+			const metrics = await this.#sampler.read(ev.payload.isRefresh === true, this.#effectiveIntervalMs());
+			items = [ALL_DISKS_OPTION, ...metrics.disks.map((disk) => ({ label: disk.id, value: disk.id }))];
+		} catch (err) {
+			if (!(err instanceof UnsupportedSystemMetricsError)) {
+				streamDeck.logger.error("failed to list fixed drives", err);
+			}
+		}
+
+		try {
+			await streamDeck.ui.sendToPropertyInspector({ event: DISK_DATA_SOURCE, items });
+		} catch (err) {
+			streamDeck.logger.error("failed to send fixed drive options", err);
+		}
 	}
 
 	override async onKeyDown(_ev: KeyDownEvent<SystemMonitorSettings>): Promise<void> {
@@ -130,7 +182,7 @@ export class SystemMonitor extends SingletonAction<SystemMonitorSettings> {
 		let metrics: SystemMetrics | undefined;
 		let diagnostic: "missing" | "unsupported" = "missing";
 		try {
-			metrics = await this.#sampler.read(options.force === true);
+			metrics = await this.#sampler.read(options.force === true, this.#effectiveIntervalMs());
 		} catch (err) {
 			diagnostic = err instanceof UnsupportedSystemMetricsError ? "unsupported" : "missing";
 			if (!(err instanceof UnsupportedSystemMetricsError)) {
@@ -163,10 +215,23 @@ export class SystemMonitor extends SingletonAction<SystemMonitorSettings> {
 		await this.#refresh(target, nextSettings, revision);
 	}
 
-	#startTicker(): void {
-		this.#ticker ??= setInterval(() => {
+	/** One ticker serves every instance, so the fastest configured key sets the cadence for all. */
+	#effectiveIntervalMs(): number {
+		return effectiveRefreshSeconds(this.#settings.values()) * 1_000;
+	}
+
+	/** (Re-)arms the shared ticker whenever the effective interval changes. */
+	#syncTicker(): void {
+		const intervalMs = this.#effectiveIntervalMs();
+		if (this.#ticker !== undefined && this.#tickerIntervalMs === intervalMs) {
+			return;
+		}
+
+		this.#stopTicker();
+		this.#tickerIntervalMs = intervalMs;
+		this.#ticker = setInterval(() => {
 			this.refreshAll().catch((err) => streamDeck.logger.error("system monitor tick failed", err));
-		}, REFRESH_INTERVAL_MS);
+		}, intervalMs);
 	}
 
 	#stopTicker(): void {
@@ -174,6 +239,7 @@ export class SystemMonitor extends SingletonAction<SystemMonitorSettings> {
 			clearInterval(this.#ticker);
 			this.#ticker = undefined;
 		}
+		this.#tickerIntervalMs = undefined;
 	}
 
 	async #refresh(
@@ -184,7 +250,7 @@ export class SystemMonitor extends SingletonAction<SystemMonitorSettings> {
 		let metrics: SystemMetrics | undefined;
 		let diagnostic: "missing" | "unsupported" = "missing";
 		try {
-			metrics = await this.#sampler.read();
+			metrics = await this.#sampler.read(false, this.#effectiveIntervalMs());
 		} catch (err) {
 			diagnostic = err instanceof UnsupportedSystemMetricsError ? "unsupported" : "missing";
 			if (!(err instanceof UnsupportedSystemMetricsError)) {
@@ -208,8 +274,9 @@ export class SystemMonitor extends SingletonAction<SystemMonitorSettings> {
 
 		const metric = isSystemMetricKind(settings.metric) ? settings.metric : DEFAULT_METRIC;
 		const gpuIndex = normalizeGpuIndex(settings.gpuIndex);
-		const reading = metrics === undefined ? { unit: metric === "network" ? "mbps" as const : metric === "gpu-power" ? "watts" as const : "percent" as const } : selectSystemMetric(metrics, metric, gpuIndex);
-		const stale = metrics?.sampledAt !== undefined && Date.now() - metrics.sampledAt.getTime() > REFRESH_INTERVAL_MS * 3;
+		const diskDrive = normalizeDiskDriveSetting(settings.diskDrive);
+		const reading = metrics === undefined ? { unit: metric === "network" ? "mbps" as const : metric === "gpu-power" ? "watts" as const : "percent" as const } : selectSystemMetric(metrics, metric, gpuIndex, diskDrive);
+		const stale = metrics?.sampledAt !== undefined && Date.now() - metrics.sampledAt.getTime() > this.#effectiveIntervalMs() * 3;
 		const status = metrics === undefined ? diagnostic : reading.value === undefined ? "missing" : stale ? "stale" : "ready";
 		const face: SystemMonitorFace = {
 			metric,
@@ -217,7 +284,8 @@ export class SystemMonitor extends SingletonAction<SystemMonitorSettings> {
 			unit: reading.unit,
 			temperatureC: reading.temperatureC,
 			status,
-			gpuIndex
+			gpuIndex,
+			diskDrive
 		};
 
 		try {
@@ -230,7 +298,7 @@ export class SystemMonitor extends SingletonAction<SystemMonitorSettings> {
 			await target.setFeedbackLayout(DIAL_LAYOUT);
 			const progress = systemMetricProgress(metric, reading.value);
 			await target.setFeedback({
-				title: systemHeaderLabel(metric, gpuIndex),
+				title: systemHeaderLabel(metric, gpuIndex, diskDrive),
 				temperature: formatSystemTemperature(face),
 				value: formatSystemMetric(metric, reading.value, reading.unit),
 				status: systemStatusLabel(status),
@@ -275,4 +343,43 @@ export function isCurrentSystemMetricRevision(currentRevision: number | undefine
 
 function normalizeGpuIndex(value: unknown): number {
 	return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 64 ? value : DEFAULT_GPU_INDEX;
+}
+
+/** A Property Inspector select stores its value as a string, so a number and a numeric string both count. */
+export function normalizeRefreshSeconds(value: unknown): number {
+	const parsed = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value.trim()) : Number.NaN;
+	if (!Number.isFinite(parsed)) {
+		return DEFAULT_REFRESH_SECONDS;
+	}
+
+	return Math.min(MAX_REFRESH_SECONDS, Math.max(MIN_REFRESH_SECONDS, Math.round(parsed)));
+}
+
+/**
+ * The cadence of the shared ticker: the fastest interval any visible key asks for.
+ *
+ * The default is the answer for an empty set only. Folding it in as the seed instead would cap every
+ * result at 15s and make the slower Property Inspector options inert.
+ */
+export function effectiveRefreshSeconds(settings: Iterable<SystemMonitorSettings>): number {
+	let fastest: number | undefined;
+	for (const entry of settings) {
+		const seconds = normalizeRefreshSeconds(entry.refreshSeconds);
+		fastest = fastest === undefined ? seconds : Math.min(fastest, seconds);
+	}
+
+	return fastest ?? DEFAULT_REFRESH_SECONDS;
+}
+
+function normalizeDiskDriveSetting(value: unknown): string | undefined {
+	if (typeof value !== "string") {
+		return undefined;
+	}
+
+	const trimmed = value.trim();
+	return trimmed === "" ? undefined : trimmed;
+}
+
+function isDataSourceRequest(value: JsonValue): value is DataSourceRequest {
+	return typeof value === "object" && value !== null && !Array.isArray(value) && "event" in value;
 }

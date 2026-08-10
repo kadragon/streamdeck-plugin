@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatSystemTemperature, renderKey, renderSystemMonitor, systemMetricProgress, systemMonitorAccent, systemStatusLabel } from "../src/render";
+import { formatSystemTemperature, renderKey, renderSystemMonitor, systemHeaderLabel, systemMetricProgress, systemMonitorAccent, systemStatusLabel } from "../src/render";
 
 function decodeImage(image: string): string {
 	return decodeURIComponent(image.slice(image.indexOf(",") + 1));
@@ -53,6 +53,17 @@ test("header names the GPU index only when it is not the default GPU", () => {
 	assert.match(decodeImage(renderSystemMonitor({ metric: "gpu", value: 20, gpuIndex: 0 })), />GPU</);
 	assert.doesNotMatch(decodeImage(renderSystemMonitor({ metric: "gpu", value: 20, gpuIndex: 0 })), />GPU #/);
 	assert.doesNotMatch(decodeImage(renderSystemMonitor({ metric: "cpu", value: 20, gpuIndex: 2 })), />CPU #/);
+});
+
+test("header names the disk drive only when the key is scoped to one", () => {
+	assert.equal(systemHeaderLabel("disk", 0, "C:"), "DISK C:");
+	assert.equal(systemHeaderLabel("disk", 0, "c:\\"), "DISK C:");
+	assert.equal(systemHeaderLabel("disk", 0), "DISK");
+	assert.equal(systemHeaderLabel("disk", 0, "   "), "DISK");
+
+	// The drive scope belongs to the disk metric alone and never leaks into another header.
+	assert.equal(systemHeaderLabel("memory", 0, "C:"), "RAM");
+	assert.match(decodeImage(renderSystemMonitor({ metric: "disk", value: 20, diskDrive: "D:" })), />DISK D:</);
 });
 
 test("dial and key faces share one status, temperature, and accent source", () => {
