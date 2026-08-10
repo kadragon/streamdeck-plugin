@@ -52,6 +52,13 @@ for (const relativePath of sourceFiles) {
 }
 
 requireText(
+	"src/usage/codex-api.ts",
+	/new EnvHttpProxyAgent\(\{[^}]*allowH2:\s*false/,
+	"Codex usage dispatcher does not pin HTTP/1.1 with allowH2: false",
+	"Keep allowH2: false. Rollup's CommonJS interop breaks undici's node:http2 binding, so a bundled h2 request fails with 'http2.connect is not a function' and the plugin falls back to rollouts forever. Unit tests inject fetchImpl and cannot catch it.",
+	"docs/architecture.md"
+);
+requireText(
 	"src/usage/claude.ts",
 	/(Number\.isFinite\(weekly\.used_percentage\)|isUsagePercent\(weekly\?\.used_percentage\))/,
 	"Claude reader does not guard used_percentage with Number.isFinite",

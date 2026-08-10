@@ -84,7 +84,13 @@ let proxyAgent: EnvHttpProxyAgent | undefined;
  * The transport used when the caller injects none: `undici`'s fetch bound to the shared proxy agent.
  */
 function defaultFetch(): typeof fetch {
-	proxyAgent ??= new EnvHttpProxyAgent();
+	// `allowH2: false` is load-bearing, not a tuning knob. Rollup's CommonJS interop rewrites undici's
+	// internal `require("node:http2")` into a binding whose `connect` is undefined, so the moment TLS
+	// negotiates h2 the request dies with `TypeError: http2.connect is not a function` — swallowed here
+	// into a silent, permanent fallback to the rollout files. It reproduces only in the bundle, never
+	// when the source is run directly, which is why the test suite cannot see it. Pinning HTTP/1.1
+	// avoids the broken code path entirely; the endpoint serves 1.1 fine.
+	proxyAgent ??= new EnvHttpProxyAgent({ allowH2: false });
 	const dispatcher = proxyAgent;
 
 	return ((input: any, init: any) => undiciFetch(input, { ...init, dispatcher })) as unknown as typeof fetch;
