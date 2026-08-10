@@ -70,14 +70,15 @@
 
 					// `datasource` is a reactive property: attaching it makes the select request the drive
 					// list, and each sample costs seconds of PowerShell work. Only a disk-scoped key needs
-					// that list, so the attribute follows the row's visibility. Guarded on the current state
-					// because a valuechange that lands on the same metric must not re-fire the request.
-					if (diskScoped) {
-						if (!diskSelect.hasAttribute("datasource")) {
-							diskSelect.setAttribute("datasource", DISK_DATA_SOURCE);
-						}
-					} else if (diskSelect.hasAttribute("datasource")) {
-						diskSelect.removeAttribute("datasource");
+					// that list, so the attribute is attached the first time this key is disk-scoped and
+					// never taken back off. Detaching would be worse than useless: the component reads the
+					// removed attribute as `null` rather than `undefined`, which sends an `{event: null}`
+					// request that never gets an answer, and a later re-attach would ask with `isRefresh`
+					// set and force a fresh sample the cached one already covers. Connecting without the
+					// attribute also skips the component's push subscription, which costs nothing while the
+					// plugin only ever answers requests — a push-based refresh would need `refresh()` here.
+					if (diskScoped && !diskSelect.hasAttribute("datasource")) {
+						diskSelect.setAttribute("datasource", DISK_DATA_SOURCE);
 					}
 				};
 
