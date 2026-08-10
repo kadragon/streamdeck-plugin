@@ -24,7 +24,10 @@
 			</sdpi-range>
 		</sdpi-item>
 		<sdpi-item label="Drive" id="disk-drive-item">
-			<sdpi-select setting="diskDrive" datasource="systemMonitorDisks" show-refresh></sdpi-select>
+			<!-- `datasource` is deliberately absent here; the visibility script below attaches it only
+			     for a disk-scoped key. Putting it back in markup makes every inspector open pay a
+			     full metrics sample for a row that is hidden. -->
+			<sdpi-select setting="diskDrive" show-refresh></sdpi-select>
 		</sdpi-item>
 		<sdpi-item label="Refresh">
 			<sdpi-select setting="refreshSeconds" default="15">
@@ -49,18 +52,34 @@
 			// sdpi-components renders into shadow DOM but exposes `value` on the host element and fires a
 			// plain "valuechange" event there, so scope-dependent rows can be toggled without polling.
 			(() => {
+				const DISK_DATA_SOURCE = "systemMonitorDisks";
 				const metric = document.querySelector('sdpi-select[setting="metric"]');
 				const gpuItem = document.getElementById("gpu-index-item");
 				const diskItem = document.getElementById("disk-drive-item");
-				if (metric === null || gpuItem === null || diskItem === null) {
+				const diskSelect = document.querySelector('sdpi-select[setting="diskDrive"]');
+				if (metric === null || gpuItem === null || diskItem === null || diskSelect === null) {
 					return;
 				}
 
 				const sync = () => {
 					// The value is undefined until the host delivers the settings; that is the cpu default.
 					const selected = metric.value ?? "cpu";
+					const diskScoped = selected === "disk";
 					gpuItem.hidden = selected !== "gpu" && selected !== "gpu-memory" && selected !== "gpu-power";
-					diskItem.hidden = selected !== "disk";
+					diskItem.hidden = !diskScoped;
+
+					// `datasource` is a reactive property: attaching it makes the select request the drive
+					// list, and each sample costs seconds of PowerShell work. Only a disk-scoped key needs
+					// that list, so the attribute is attached the first time this key is disk-scoped and
+					// never taken back off. Detaching would be worse than useless: the component reads the
+					// removed attribute as `null` rather than `undefined`, which sends an `{event: null}`
+					// request that never gets an answer, and a later re-attach would ask with `isRefresh`
+					// set and force a fresh sample the cached one already covers. Connecting without the
+					// attribute also skips the component's push subscription, which costs nothing while the
+					// plugin only ever answers requests — a push-based refresh would need `refresh()` here.
+					if (diskScoped && !diskSelect.hasAttribute("datasource")) {
+						diskSelect.setAttribute("datasource", DISK_DATA_SOURCE);
+					}
 				};
 
 				metric.addEventListener("valuechange", sync);
