@@ -35,10 +35,11 @@ import {
 } from "../render";
 
 const DEFAULT_REFRESH_SECONDS = 15;
-const MIN_REFRESH_SECONDS = 5;
-// One sample costs seconds of PowerShell and nvidia-smi work, so the slowest cadence is capped well
-// below "never" while the fastest stays above the sample cost.
-const MAX_REFRESH_SECONDS = 300;
+// One sample costs seconds of PowerShell and nvidia-smi work, so the floor stays clear of the sample
+// cost — a cadence that samples continuously would inflate the very CPU number the key displays. Both
+// bounds match the options the Property Inspector offers, so no reachable setting is clamped away.
+const MIN_REFRESH_SECONDS = 10;
+const MAX_REFRESH_SECONDS = 120;
 const DEFAULT_METRIC: SystemMetricKind = "cpu";
 const DEFAULT_GPU_INDEX = 0;
 const DISK_DATA_SOURCE = "systemMonitorDisks";

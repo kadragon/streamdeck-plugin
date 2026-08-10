@@ -1,5 +1,5 @@
 import type { UsageSource } from "./usage/types";
-import type { SystemMetricKind } from "./metrics/types";
+import { normalizeDiskDrive, type SystemMetricKind } from "./metrics/types";
 
 export type { SystemMetricKind } from "./metrics/types";
 
@@ -434,7 +434,7 @@ function renderSystemStatus(status: SystemMonitorFace["status"]): string {
 export function systemHeaderLabel(metric: SystemMetricKind, gpuIndex: number | undefined, diskDrive?: string): string {
 	const label = systemMetricLabel(metric);
 	if (metric === "disk") {
-		const drive = formatDiskDrive(diskDrive);
+		const drive = normalizeDiskDrive(diskDrive);
 		return drive === undefined ? label : `${label} ${drive}`;
 	}
 	if (!isGpuScoped(metric) || typeof gpuIndex !== "number" || !Number.isInteger(gpuIndex) || gpuIndex <= 0) {
@@ -442,15 +442,6 @@ export function systemHeaderLabel(metric: SystemMetricKind, gpuIndex: number | u
 	}
 
 	return `${label} #${gpuIndex}`;
-}
-
-function formatDiskDrive(value: string | undefined): string | undefined {
-	if (typeof value !== "string") {
-		return undefined;
-	}
-
-	const trimmed = value.trim().replace(/[\\/]+$/, "").toUpperCase();
-	return trimmed === "" ? undefined : trimmed;
 }
 
 function isGpuScoped(metric: SystemMetricKind): boolean {

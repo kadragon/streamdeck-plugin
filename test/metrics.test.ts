@@ -93,8 +93,8 @@ test("the configured refresh interval accepts select strings and clamps out-of-r
 	assert.equal(normalizeRefreshSeconds(30), 30);
 	assert.equal(normalizeRefreshSeconds("60"), 60);
 	assert.equal(normalizeRefreshSeconds(" 10 "), 10);
-	assert.equal(normalizeRefreshSeconds(1), 5);
-	assert.equal(normalizeRefreshSeconds(9_999), 300);
+	assert.equal(normalizeRefreshSeconds(1), 10);
+	assert.equal(normalizeRefreshSeconds(9_999), 120);
 
 	for (const bogus of [undefined, null, "", "fast", Number.NaN, Number.POSITIVE_INFINITY, {}]) {
 		assert.equal(normalizeRefreshSeconds(bogus), 15);
@@ -105,12 +105,12 @@ test("the shared ticker runs at the fastest configured interval and defaults onl
 	// The default answers the empty set; folding it in as a seed would cap every result at 15s.
 	assert.equal(effectiveRefreshSeconds([]), 15);
 	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: "120" }]), 120);
-	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: "5" }]), 5);
-	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: 300 }]), 300);
+	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: "10" }]), 10);
+	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: 120 }]), 120);
 
 	// The fastest visible key wins, whichever order the map yields.
-	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: "60" }, { refreshSeconds: "5" }]), 5);
-	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: "5" }, { refreshSeconds: "60" }]), 5);
+	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: "60" }, { refreshSeconds: "10" }]), 10);
+	assert.equal(effectiveRefreshSeconds([{ refreshSeconds: "10" }, { refreshSeconds: "60" }]), 10);
 
 	// A key that never chose an interval, or stored an unusable one, contributes the default.
 	assert.equal(effectiveRefreshSeconds([{ metric: "cpu" }]), 15);

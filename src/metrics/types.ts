@@ -15,6 +15,22 @@ export function isSystemMetricKind(value: unknown): value is SystemMetricKind {
 }
 
 /**
+ * Canonical form of a drive identifier, ignoring case and the trailing separator Windows tools add.
+ *
+ * It lives here, in the module with no Node dependencies, because both the sampler that picks which
+ * drive to read and the renderer that prints the drive name must agree: two copies that drift would
+ * let a key show one drive's name over another drive's percentage.
+ */
+export function normalizeDiskDrive(value: unknown): string | undefined {
+	if (typeof value !== "string") {
+		return undefined;
+	}
+
+	const trimmed = value.trim().replace(/[\\/]+$/, "").toUpperCase();
+	return trimmed === "" ? undefined : trimmed;
+}
+
+/**
  * Steps through {@link SYSTEM_METRIC_KINDS}, which is the order the Property Inspector offers.
  *
  * The list wraps in both directions so a dial never stops at an end, and an unrecognized current

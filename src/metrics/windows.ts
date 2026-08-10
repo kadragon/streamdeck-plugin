@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import type { SystemMetricKind } from "./types";
+import { normalizeDiskDrive, type SystemMetricKind } from "./types";
 
 const execFileAsync = promisify(execFile);
 
@@ -182,16 +182,6 @@ function parseDiskRows(value: unknown): SystemDiskMetrics[] {
 		const id = typeof row.id === "string" ? row.id.trim() : "";
 		return id === "" ? [] : [{ id, usagePercent: asPercent(row.usagePercent) }];
 	});
-}
-
-/** Compares drive identifiers ignoring case and the trailing separator Windows tools add. */
-export function normalizeDiskDrive(value: unknown): string | undefined {
-	if (typeof value !== "string") {
-		return undefined;
-	}
-
-	const trimmed = value.trim().replace(/[\\/]+$/, "").toUpperCase();
-	return trimmed === "" ? undefined : trimmed;
 }
 
 /** Parses all NVIDIA rows so different visible keys can select different GPU indices. */
