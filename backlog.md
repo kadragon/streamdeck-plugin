@@ -27,4 +27,5 @@ Spec: `docs/design/system-monitor-ux.md`. Ordered; A1 precedes B1.
 ## Deferred
 
 - [ ] [feat] Property Inspector: conditional GPU-index visibility, configurable refresh interval, disk-drive selection — `com.kadragon.aiusage.sdPlugin/ui/system-monitor.html`
+- [ ] [feat] Investigate a live usage endpoint for the Claude source, as done for Codex via `wham/usage` — Claude Code persists no percentages of its own, so this needs a spike to find whether an equivalent endpoint and local credential exist — `src/usage/claude.ts`
 - [ ] [feat] Multi-metric key (2–3 readings on one 144×144 face) — rejected in the current spec on glanceability grounds; revisit only with hardware evidence

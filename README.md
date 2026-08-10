@@ -1,7 +1,8 @@
 # Stream Deck plugin
 
-A personal Stream Deck plugin bundling the keys I use while working with terminal AI agents. Everything
-is read from local files or native local commands; the plugin never calls an API.
+A personal Stream Deck plugin bundling the keys I use while working with terminal AI agents. Almost
+everything is read from local files or native local commands; the single exception is the Codex usage
+endpoint below, called with your own local credentials.
 
 | Action | What the key does |
 | --- | --- |
@@ -37,8 +38,18 @@ below 60 C, amber from 60 through 79.9 C, and red at 80 C or higher.
 
 | Source | Origin | Freshness |
 | --- | --- | --- |
-| Codex CLI | `~/.codex/sessions/**/rollout-*.jsonl` → last `token_count` event's `rate_limits` window whose `window_minutes` is closest to 10080 (7 days) | As of the last Codex turn |
+| Codex CLI | `GET https://chatgpt.com/backend-api/wham/usage` (the request the Codex CLI itself polls), authorised with `~/.codex/auth.json`; falls back to `~/.codex/sessions/**/rollout-*.jsonl` → last `token_count` event's `rate_limits` window whose `window_minutes` is closest to 10080 (7 days) | Live, or as of the last Codex turn when the endpoint is unavailable |
 | Claude Code | `~/.claude/ai-usage/claude.json` (+ `claude-history.jsonl`), written by `scripts/statusline-usage-snapshot.sh` | As of the last status-line render |
+
+The Codex key therefore keeps refreshing even while you are not running Codex; the rollout files are
+still read, because they carry the observation history the burn-rate estimate needs. The access token in
+`auth.json` expires after about ten days — once it has, the plugin skips the request entirely and shows
+the rollout-only reading until running `codex` once makes the CLI renew it.
+
+Behind a corporate or campus proxy the request still gets through: it goes out via undici's
+`EnvHttpProxyAgent`, which honours `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY`. Node's own `fetch`
+ignores those variables unless the process is launched with `NODE_USE_ENV_PROXY=1`, which Stream Deck
+does not do, so without the agent every request would simply time out into the rollout fallback.
 
 Claude Code does not persist rate-limit percentages anywhere. It pushes them to the status line on
 stdin and nowhere else, so `scripts/statusline-usage-snapshot.sh` wraps the status line: it tees the
@@ -62,7 +73,7 @@ samples span at least 10 minutes and rise by at least 0.5 points, so a flat or v
 produces no projection rather than a wild one.
 
 Codex needs no extra plumbing — a rollout records `rate_limits` on every turn, so the series is already
-there. Claude Code has only the transient status-line payload, so the wrapper appends one line to
+there; the live endpoint supplies the current percentage the series is projected forward from. Claude Code has only the transient status-line payload, so the wrapper appends one line to
 `claude-history.jsonl` per *change* in the percentage (the status line renders far more often than the
 number moves), trimming the file at 500 lines.
 

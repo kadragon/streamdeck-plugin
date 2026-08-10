@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 
 import { currentWindowSamples } from "./burn-rate";
-import { NoUsageDataError, isUsagePercent, parseResetTimestamp, parseUsageTimestamp, type UsageReading } from "./types";
+import { fetchCodexUsage } from "./codex-api";
+import { NoUsageDataError, isUsagePercent, parseResetTimestamp, parseUsageTimestamp, type UsageReading, type UsageSample } from "./types";
 
 /** Number of minutes in the weekly rate-limit window Codex reports. */
 const WEEKLY_WINDOW_MINUTES = 10080;
@@ -39,8 +40,70 @@ type Observation = {
 	at: Date;
 };
 
-/** The last reading, kept so an untouched rollout set does not have to be re-read. */
+/** The last rollout reading, kept so an untouched rollout set does not have to be re-read. */
 let cached: { fingerprint: string; reading: UsageReading } | undefined;
+
+/**
+ * Options for {@link readCodexUsage}.
+ */
+export type CodexUsageOptions = {
+	/**
+	 * Caller's clock. The usage endpoint is only consulted when this is supplied, because its response
+	 * carries no observation time and a reader may not invent one.
+	 */
+	now?: Date;
+	/** Credentials location and HTTP transport, overridden by tests so they never touch the network. */
+	authPath?: string;
+	fetchImpl?: typeof fetch;
+	timeoutMs?: number;
+};
+
+/**
+ * Reads the weekly rate-limit percentage Codex reports, preferring the live usage endpoint.
+ *
+ * The rollout files only gain an observation when the user actually runs Codex, so after a few idle days
+ * the key would show a days-old percentage and then go stale. The usage endpoint the Codex CLI polls
+ * itself answers at any time, so it supplies the current percentage while the rollouts — which carry a
+ * `rate_limits` payload per turn — still supply the series a burn rate is estimated from.
+ *
+ * When the endpoint cannot be reached or trusted, the result is exactly the rollout-only reading.
+ */
+export async function readCodexUsage(
+	sessionsDir = path.join(os.homedir(), ".codex", "sessions"),
+	options: CodexUsageOptions = {}
+): Promise<UsageReading> {
+	let rollout: UsageReading | undefined;
+	let rolloutError: unknown;
+	try {
+		rollout = await readRolloutUsage(sessionsDir);
+	} catch (err) {
+		rolloutError = err;
+	}
+
+	const now = options.now;
+	const api =
+		now === undefined
+			? undefined
+			: await fetchCodexUsage({ now, authPath: options.authPath, fetchImpl: options.fetchImpl, timeoutMs: options.timeoutMs });
+
+	if (api !== undefined && now !== undefined) {
+		// Every rollout observation is older than the endpoint's answer, so all of them — the latest
+		// included — become history behind it.
+		const history: UsageSample[] =
+			rollout === undefined ? [] : [...rollout.history, { at: rollout.observedAt, usedPercent: rollout.usedPercent }];
+
+		// A missing reset time would cost more than the countdown caption: it is also the cutoff that keeps
+		// pre-reset samples out of the burn rate. The rollout's reset time describes the same window, so it
+		// stands in whenever the endpoint omits one.
+		return { usedPercent: api.usedPercent, resetsAt: api.resetsAt ?? rollout?.resetsAt, observedAt: now, history };
+	}
+
+	if (rollout === undefined) {
+		throw rolloutError;
+	}
+
+	return rollout;
+}
 
 /**
  * Reads the most recent weekly rate-limit percentage Codex CLI recorded in `~/.codex/sessions`.
@@ -48,7 +111,7 @@ let cached: { fingerprint: string; reading: UsageReading } | undefined;
  * Codex writes a `token_count` event carrying `rate_limits` on every turn, so a rollout holds a whole
  * series of observations, not just the latest — enough to estimate a burn rate without extra plumbing.
  */
-export async function readCodexUsage(sessionsDir = path.join(os.homedir(), ".codex", "sessions")): Promise<UsageReading> {
+async function readRolloutUsage(sessionsDir: string): Promise<UsageReading> {
 	const files = await newestRollouts(sessionsDir);
 
 	// While Codex sits idle the scan never accumulates enough span to stop early, so without this it

@@ -42,13 +42,6 @@ function collectTypeScript(directory) {
 const sourceFiles = collectTypeScript("src");
 for (const relativePath of sourceFiles) {
 	const content = read(relativePath);
-	if (/\b(?:fetch|axios)\s*\(|\b(?:http|https)\.request\s*\(|\bnet\.connect\s*\(/.test(content)) {
-		failures.push({
-			message: relativePath + " introduces a network client call",
-			fix: "Read local tool files through the existing usage-reader boundary; do not add API/network access.",
-			ref: "docs/architecture.md"
-		});
-	}
 	if (relativePath.includes(path.join("src", "usage")) && /new Date\(\)/.test(content)) {
 		failures.push({
 			message: relativePath + " contains a no-argument Date fallback",
@@ -123,6 +116,13 @@ try {
 		failures.push({
 			message: "Stream Deck manifest CodePath is not bin/plugin.js",
 			fix: "Keep the manifest pointed at Rollup's generated bundle.",
+			ref: "docs/architecture.md"
+		});
+	}
+	if (!(Number(parsed.Nodejs?.Version) >= 24)) {
+		failures.push({
+			message: "Stream Deck manifest does not pin Node.js 24 or newer",
+			fix: "Keep Nodejs.Version at 24 or higher: the bundle statically imports node:sqlite through undici, and an older runtime fails to load the whole plugin with ERR_UNKNOWN_BUILTIN_MODULE.",
 			ref: "docs/architecture.md"
 		});
 	}

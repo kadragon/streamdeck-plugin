@@ -68,7 +68,21 @@ plugin -> actions -> render
 
 ## Data Access
 
-The plugin makes no API calls. Claude data comes from `~/.claude/ai-usage/claude.json` and `claude-history.jsonl`; Codex data comes from `~/.codex/sessions/**/rollout-*.jsonl`. The shell wrapper creates the Claude files from status-line stdin and forwards the original payload to the configured status-line program.
+Claude data comes from `~/.claude/ai-usage/claude.json` and `claude-history.jsonl`. Codex data comes from
+`~/.codex/sessions/**/rollout-*.jsonl` plus one usage-only endpoint — `GET
+https://chatgpt.com/backend-api/wham/usage`, the same request the Codex CLI polls — authorised with the
+user's own local credentials from `~/.codex/auth.json`. The endpoint supplies the current percentage and
+reset time, the rollouts supply the burn-rate history, and any endpoint failure (expired token, non-200,
+network error) falls back to the rollout-only reading. The plugin makes no other network calls.
+
+That request is issued through `undici`'s `EnvHttpProxyAgent`, so it honours `HTTP_PROXY`, `HTTPS_PROXY`,
+and `NO_PROXY`. Node's global `fetch` ignores those variables unless the process was started with
+`NODE_USE_ENV_PROXY=1`, which a plugin cannot control; behind a proxy without the agent every request
+times out and the reading silently degrades to rollouts only. The agent is created once per process,
+because the endpoint is polled per refresh tick. `undici` is also why the manifest must pin Node.js 24 or
+newer — its cache store imports `node:sqlite`, and an older runtime fails to load the bundle at all.
+
+The shell wrapper creates the Claude files from status-line stdin and forwards the original payload to the configured status-line program.
 
 Warp Tab Config discovery also stays local. The action scans Warp's platform-specific `tab_configs`
 directory for `.toml` files, uses the filename stem as the launch identity, and reads only the optional

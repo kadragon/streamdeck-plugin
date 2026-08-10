@@ -44,16 +44,20 @@ const DEFAULT_DASHBOARDS: Record<UsageSource, string> = {
 	codex: "https://chatgpt.com/?openaicom_referred=true#settings/Usage"
 };
 
-const READERS: Record<UsageSource, () => Promise<UsageReading>> = {
+/**
+ * Readers take the caller's clock, because the Codex source dates an endpoint answer that carries no
+ * observation time of its own; the Claude source reads only files and ignores it.
+ */
+const READERS: Record<UsageSource, (now: Date) => Promise<UsageReading>> = {
 	claude: () => readClaudeUsage(),
-	codex: () => readCodexUsage()
+	codex: (now) => readCodexUsage(undefined, { now })
 };
 
 /**
  * Displays the share of the weekly rate-limit allowance a tool has already consumed.
  *
- * Both readings come from files the tools write themselves, so pressing the key only forces a re-read;
- * it never calls out to an API.
+ * Readings come from the files the tools write themselves, plus — for Codex — the usage-only endpoint
+ * its CLI polls, so an idle Codex no longer freezes the key. Pressing the key opens the usage page.
  */
 @action({ UUID: "com.kadragon.aiusage.limit" })
 export class WeeklyLimit extends SingletonAction<WeeklyLimitSettings> {
@@ -172,9 +176,11 @@ export class WeeklyLimit extends SingletonAction<WeeklyLimitSettings> {
 		// The title would overlap the rendered face, so the face carries all the text.
 		await target.setTitle("");
 
+		const now = new Date();
+
 		let reading: UsageReading;
 		try {
-			reading = await READERS[source]();
+			reading = await READERS[source](now);
 		} catch (err) {
 			if (!(err instanceof NoUsageDataError)) {
 				streamDeck.logger.error(`failed to read ${source} usage`, err);
@@ -184,7 +190,6 @@ export class WeeklyLimit extends SingletonAction<WeeklyLimitSettings> {
 			return false;
 		}
 
-		const now = new Date();
 		const stale = now.getTime() - reading.observedAt.getTime() > STALE_AFTER_MS;
 		const { caption, warn } = this.#caption(reading, now, stale);
 

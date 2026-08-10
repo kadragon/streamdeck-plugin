@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- [done] Refresh Codex usage without a Codex turn (ai-usage-streamdeck v0.8.0) (2026-08-10) → docs/architecture.md
+
 - [done] Rework System Monitor UI/UX and drop AI Usage Overview and Warp URI (ai-usage-streamdeck v0.7.0) (2026-08-06) → docs/design/system-monitor-ux.md
 
 - [done] Dial layout slots and CPU package temperature (ai-usage-streamdeck v0.6.0) (2026-08-06) → docs/runbook.md
