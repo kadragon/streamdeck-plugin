@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- [done] Request the drive list only on disk-scoped System Monitor keys (ai-usage-streamdeck v0.9.1) (2026-08-10) → docs/design/system-monitor-ux.md
 - [done] Scope System Monitor inspector controls and make refresh configurable (ai-usage-streamdeck v0.9.0) (2026-08-10) → docs/design/system-monitor-ux.md
 - [done] Confine network egress and make the Codex usage fallback diagnosable (ai-usage-streamdeck v0.8.2) (2026-08-10) → docs/architecture.md
 - [done] Refresh Codex usage without a Codex turn (ai-usage-streamdeck v0.8.0) (2026-08-10) → docs/architecture.md

@@ -24,7 +24,10 @@
 			</sdpi-range>
 		</sdpi-item>
 		<sdpi-item label="Drive" id="disk-drive-item">
-			<sdpi-select setting="diskDrive" datasource="systemMonitorDisks" show-refresh></sdpi-select>
+			<!-- `datasource` is deliberately absent here; the visibility script below attaches it only
+			     for a disk-scoped key. Putting it back in markup makes every inspector open pay a
+			     full metrics sample for a row that is hidden. -->
+			<sdpi-select setting="diskDrive" show-refresh></sdpi-select>
 		</sdpi-item>
 		<sdpi-item label="Refresh">
 			<sdpi-select setting="refreshSeconds" default="15">
@@ -49,18 +52,33 @@
 			// sdpi-components renders into shadow DOM but exposes `value` on the host element and fires a
 			// plain "valuechange" event there, so scope-dependent rows can be toggled without polling.
 			(() => {
+				const DISK_DATA_SOURCE = "systemMonitorDisks";
 				const metric = document.querySelector('sdpi-select[setting="metric"]');
 				const gpuItem = document.getElementById("gpu-index-item");
 				const diskItem = document.getElementById("disk-drive-item");
-				if (metric === null || gpuItem === null || diskItem === null) {
+				const diskSelect = document.querySelector('sdpi-select[setting="diskDrive"]');
+				if (metric === null || gpuItem === null || diskItem === null || diskSelect === null) {
 					return;
 				}
 
 				const sync = () => {
 					// The value is undefined until the host delivers the settings; that is the cpu default.
 					const selected = metric.value ?? "cpu";
+					const diskScoped = selected === "disk";
 					gpuItem.hidden = selected !== "gpu" && selected !== "gpu-memory" && selected !== "gpu-power";
-					diskItem.hidden = selected !== "disk";
+					diskItem.hidden = !diskScoped;
+
+					// `datasource` is a reactive property: attaching it makes the select request the drive
+					// list, and each sample costs seconds of PowerShell work. Only a disk-scoped key needs
+					// that list, so the attribute follows the row's visibility. Guarded on the current state
+					// because a valuechange that lands on the same metric must not re-fire the request.
+					if (diskScoped) {
+						if (!diskSelect.hasAttribute("datasource")) {
+							diskSelect.setAttribute("datasource", DISK_DATA_SOURCE);
+						}
+					} else if (diskSelect.hasAttribute("datasource")) {
+						diskSelect.removeAttribute("datasource");
+					}
 				};
 
 				metric.addEventListener("valuechange", sync);
