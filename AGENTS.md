@@ -18,9 +18,8 @@ Enforcement: `npm run check:principles`, `npm run typecheck`, build, CI, and QA 
 
 1. **Reject untrusted readings** — usage percentages must be finite numbers and timestamps must be usable before entering `UsageReading`.
 2. **Contain async failures** — SDK wake/ticker callbacks must catch and log rejected promises; no background rejection may terminate the plugin.
-3. **Keep data local** — plugin source reads local tool files and does not add network clients or API calls.
-4. **Build from source** — package output is generated from `src/`; edit source, manifest, or UI, then run `npm run build`.
-5. **Preserve evidence integrity** — `not_observed != absent`; write `[unknown — read {source} to verify]` instead of inventing values.
+3. **Build from source** — package output is generated from `src/`; edit source, manifest, or UI, then run `npm run build`.
+4. **Preserve evidence integrity** — `not_observed != absent`; write `[unknown — read {source} to verify]` instead of inventing values.
 
 ## Delegation
 

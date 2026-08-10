@@ -24,7 +24,15 @@ Spec: `docs/design/system-monitor-ux.md`. Ordered; A1 precedes B1.
 - [x] [feat] B4 — Add `layouts/system-monitor.json` (200×100, non-overlapping rects: label, value, `bar` with explicit range, status/temperature line) and switch `setFeedbackLayout` off `$B1`; verify with `npm run check:package` — `com.kadragon.aiusage.sdPlugin/layouts/system-monitor.json`, `src/actions/system-metrics.ts`, `com.kadragon.aiusage.sdPlugin/manifest.json`
 - [x] [feat] B5 — Rewrite `TriggerDescription` to the real behaviour (`Push: Refresh now`, `Rotate: Change metric`, `Touch: Refresh now`) and update `README.md` / `docs/runbook.md` — `com.kadragon.aiusage.sdPlugin/manifest.json`, `README.md`, `docs/runbook.md`
 
+## Review Follow-ups (PR #7)
+
+- [ ] [constraint] Restore a scoped network-client guard in `check-principles.mjs` — the blanket `fetch|axios|http.request|net.connect` ban was deleted wholesale by explicit decision; three reviewers independently proposed keeping it with `src/usage/codex-api.ts` allowlisted, so nothing mechanical stops a future file sending the OAuth bearer token to another host. Needs a user call before implementing — `scripts/check-principles.mjs`, `AGENTS.md`
+- [ ] [refactor] Make `now` a required parameter of `readCodexUsage` instead of an optional field — omitting it silently disables the whole API path with no type error, no log, and no failing test — `src/usage/codex.ts`, `test/usage.test.ts`
+- [ ] [feat] Give the API fallback a diagnostic signal — every failure mode collapses to `undefined` with no logging, so a payload-shape change would silently revert the feature to rollout-only forever. Decide whether `src/usage/` may reach the SDK logger or should return a reason to the caller — `src/usage/codex-api.ts`, `src/actions/weekly-limit.ts`
+- [ ] [test] Cover `defaultFetch()` itself — every test injects `fetchImpl`, so the proxy-agent wiring, header set, and URL are only ever exercised in production — `test/usage.test.ts`
+
 ## Deferred
 
 - [ ] [feat] Property Inspector: conditional GPU-index visibility, configurable refresh interval, disk-drive selection — `com.kadragon.aiusage.sdPlugin/ui/system-monitor.html`
+- [ ] [feat] Investigate a live usage endpoint for the Claude source, as done for Codex via `wham/usage` — Claude Code persists no percentages of its own, so this needs a spike to find whether an equivalent endpoint and local credential exist — `src/usage/claude.ts`
 - [ ] [feat] Multi-metric key (2–3 readings on one 144×144 face) — rejected in the current spec on glanceability grounds; revisit only with hardware evidence
