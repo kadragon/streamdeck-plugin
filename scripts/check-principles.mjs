@@ -48,8 +48,23 @@ const NETWORK_EGRESS_FILE = path.join("src", "usage", "codex-api.ts");
 /**
  * Call-shaped on purpose: a bare `fetch` would flag the legitimate `fetchImpl?: typeof fetch`
  * injection points, which exist so tests never touch the network.
+ *
+ * The list covers the spellings a real egress would take, not just the obvious one — `https.request`
+ * and `http.get` are as easy to reach for as `http.request`, and an import quoted with `'` or
+ * deferred through `import()`/`require()` is the same import. A guard that only catches the form
+ * already in the codebase enforces nothing.
  */
-const NETWORK_CLIENT_PATTERNS = [/\bfetch\s*\(/, /\baxios\b/, /\bhttp\.request\s*\(/, /\bnet\.connect\s*\(/, /from\s+"undici"/];
+const NETWORK_CLIENT_PATTERNS = [
+	/\bfetch\s*\(/,
+	/\baxios\b/,
+	/\bhttps?\.(request|get)\s*\(/,
+	/\bhttp2\.connect\s*\(/,
+	/\bnet\.(connect|createConnection)\s*\(/,
+	/\btls\.connect\s*\(/,
+	/\bnew\s+WebSocket\s*\(/,
+	/\bfrom\s+["']undici["']/,
+	/\b(?:import|require)\s*\(\s*["']undici["']/
+];
 
 const sourceFiles = collectTypeScript("src");
 for (const relativePath of sourceFiles) {

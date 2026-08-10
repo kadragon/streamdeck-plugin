@@ -70,6 +70,8 @@ function usageEndpointMessage(failure: CodexApiFailure): string {
 			return `codex usage endpoint returned HTTP ${failure.status}; falling back to rollout files`;
 		case "network-error":
 			return `codex usage endpoint unreachable: ${failure.message}; falling back to rollout files`;
+		case "unreadable-body":
+			return `codex usage endpoint answered with a body that would not parse: ${failure.message}; falling back to rollout files`;
 		case "invalid-body":
 			return "codex usage endpoint returned no usable weekly percentage; falling back to rollout files";
 	}

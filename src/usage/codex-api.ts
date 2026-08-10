@@ -67,7 +67,28 @@ export type CodexApiFailure =
 	| { kind: "no-credentials" }
 	| { kind: "http-error"; status: number }
 	| { kind: "network-error"; message: string }
+	| { kind: "unreadable-body"; message: string }
 	| { kind: "invalid-body" };
+
+/**
+ * Flattens an error and its `cause` chain into one line.
+ *
+ * `undici` reports every transport failure as the same `TypeError: fetch failed` and puts the real
+ * reason — DNS, `ECONNREFUSED`, a TLS chain error, or the bundled `http2.connect` breakage — on
+ * `cause`. Reporting only the top message would make every network failure read identically, which
+ * is the silence this whole diagnostic path exists to end.
+ */
+function describeError(err: unknown): string {
+	const parts: string[] = [];
+	let current: unknown = err;
+
+	for (let depth = 0; current !== undefined && current !== null && depth < 4; depth += 1) {
+		parts.push(current instanceof Error ? current.message : String(current));
+		current = current instanceof Error ? (current as { cause?: unknown }).cause : undefined;
+	}
+
+	return parts.join(": ");
+}
 
 /**
  * Options for {@link fetchCodexUsage}.
@@ -227,12 +248,14 @@ async function requestCodexUsage(options: CodexApiOptions): Promise<{ value?: Co
 		headers["chatgpt-account-id"] = auth.accountId;
 	}
 
-	let body: any;
+	// Each stage gets its own try, so a reason names the stage that actually failed: a body that will
+	// not parse is a payload problem, not an unreachable endpoint, and the two have different fixes.
+	let response: Response;
 	try {
 		// Building the default transport constructs a proxy agent, which throws on a malformed
 		// HTTP_PROXY value; inside the try that stays a fallback to the rollouts, not a failed refresh.
 		const doFetch = options.fetchImpl ?? defaultFetch();
-		const response = await doFetch(USAGE_URL, {
+		response = await doFetch(USAGE_URL, {
 			method: "GET",
 			headers,
 			// `authorization` is stripped across origins but `chatgpt-account-id` is not, so a redirect
@@ -240,16 +263,23 @@ async function requestCodexUsage(options: CodexApiOptions): Promise<{ value?: Co
 			redirect: "error",
 			signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
 		});
-		if (!response.ok) {
-			// undici holds the connection until the body is read or collected; a token that 401s on every
-			// refresh would otherwise accumulate sockets.
-			await response.body?.cancel();
-			return { failure: { kind: "http-error", status: response.status } };
-		}
+	} catch (err) {
+		return { failure: { kind: "network-error", message: describeError(err) } };
+	}
 
+	if (!response.ok) {
+		// undici holds the connection until the body is read or collected; a token that 401s on every
+		// refresh would otherwise accumulate sockets. A cancel that rejects must not overwrite the
+		// status: the operator needs to know it was a 401, not that the endpoint was unreachable.
+		await response.body?.cancel().catch(() => undefined);
+		return { failure: { kind: "http-error", status: response.status } };
+	}
+
+	let body: any;
+	try {
 		body = await response.json();
 	} catch (err) {
-		return { failure: { kind: "network-error", message: err instanceof Error ? err.message : String(err) } };
+		return { failure: { kind: "unreadable-body", message: describeError(err) } };
 	}
 
 	const weekly = pickWeeklyWindow(body?.rate_limit);

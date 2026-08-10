@@ -400,12 +400,48 @@ test("Codex API reports each failure reason once per live attempt, never on a ca
 		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl: stubFetch(503, { detail: "unavailable" }), onFailure });
 		assert.deepEqual(failures.at(-1), { kind: "http-error", status: 503 });
 
+		// The status survives a body-cancel that rejects; the operator must still see the 401.
+		resetCodexUsageCache();
+		const uncancellable = (async () => ({
+			ok: false,
+			status: 401,
+			body: {
+				cancel: async () => {
+					throw new Error("stream already errored");
+				}
+			},
+			json: async () => ({})
+		})) as unknown as typeof fetch;
+		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl: uncancellable, onFailure });
+		assert.deepEqual(failures.at(-1), { kind: "http-error", status: 401 });
+
 		resetCodexUsageCache();
 		const throwing = (async () => {
 			throw new Error("The operation was aborted due to timeout");
 		}) as unknown as typeof fetch;
 		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl: throwing, onFailure });
 		assert.deepEqual(failures.at(-1), { kind: "network-error", message: "The operation was aborted due to timeout" });
+
+		// A cause chain is flattened, so undici's uniform `fetch failed` still names the real reason.
+		resetCodexUsageCache();
+		const wrapped = (async () => {
+			throw new TypeError("fetch failed", { cause: new Error("connect ECONNREFUSED 127.0.0.1:1") });
+		}) as unknown as typeof fetch;
+		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl: wrapped, onFailure });
+		assert.deepEqual(failures.at(-1), { kind: "network-error", message: "fetch failed: connect ECONNREFUSED 127.0.0.1:1" });
+
+		// A 200 whose body will not parse is a payload problem, not an unreachable endpoint.
+		resetCodexUsageCache();
+		const unparseable = (async () => ({
+			ok: true,
+			status: 200,
+			body: { cancel: async () => undefined },
+			json: async () => {
+				throw new SyntaxError("Unexpected token '<'");
+			}
+		})) as unknown as typeof fetch;
+		await readCodexUsage(directory, { now: NOW, authPath, fetchImpl: unparseable, onFailure });
+		assert.deepEqual(failures.at(-1), { kind: "unreadable-body", message: "Unexpected token '<'" });
 
 		resetCodexUsageCache();
 		const nonsense = stubFetch(200, usageBody({ primary: { used_percent: null, limit_window_seconds: 604800 } }));
@@ -439,9 +475,11 @@ test("Codex API keeps its reading when the failure sink throws", async () => {
 
 test("default transport issues a real request through the shared dispatcher", async () => {
 	// The module-level proxy agent is built on the first call and reads the proxy variables then, so a
-	// machine-wide HTTP_PROXY would otherwise swallow a request to a loopback server.
-	const previous = process.env.NO_PROXY;
+	// machine-wide HTTP_PROXY would otherwise swallow a request to a loopback server. Both spellings
+	// are set: undici resolves `no_proxy ?? NO_PROXY`, so a lowercase one on the host would win.
+	const previous = { upper: process.env.NO_PROXY, lower: process.env.no_proxy };
 	process.env.NO_PROXY = "127.0.0.1,localhost";
+	process.env.no_proxy = "127.0.0.1,localhost";
 
 	const received: { url?: string; header?: string } = {};
 	const server = http.createServer((req, res) => {
@@ -466,13 +504,19 @@ test("default transport issues a real request through the shared dispatcher", as
 		assert.equal(received.header, "codex_cli_rs");
 	} finally {
 		await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
-		if (previous === undefined) {
-			delete process.env.NO_PROXY;
-		} else {
-			process.env.NO_PROXY = previous;
-		}
+		restoreEnv("NO_PROXY", previous.upper);
+		restoreEnv("no_proxy", previous.lower);
 	}
 });
+
+/** Puts one environment variable back, distinguishing "was unset" from "was empty". */
+function restoreEnv(name: string, value: string | undefined): void {
+	if (value === undefined) {
+		delete process.env[name];
+	} else {
+		process.env[name] = value;
+	}
+}
 
 test("burn projection ignores samples before the latest reset", () => {
 	const reading: UsageReading = {
