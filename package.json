@@ -28,6 +28,6 @@
     },
     "dependencies": {
         "@elgato/streamdeck": "^2.1.0",
-        "undici": "^8.10.0"
+        "undici": "^8.10.2"
     }
 }
