@@ -9,6 +9,7 @@ endpoint below, called with your own local credentials.
 | **Weekly Limit** | Shows how much of the weekly rate-limit allowance Claude Code or Codex CLI has consumed |
 | **System Monitor** | Shows local Windows CPU, RAM, disk, network, NVIDIA GPU, memory, and power metrics |
 | **Warp Tab Config** | Opens one of Warp's saved Tab Configs |
+| **Break Timer** | Counts down a work interval and shows when to take a break, without interrupting work |
 
 ## System Monitor (Windows)
 
@@ -134,3 +135,13 @@ Choose the config in the action's Property Inspector; the list is read from Warp
 through Warp's `warp://tab_config/<filename>` URI scheme, so the configured directory, shell, panes, and
 startup commands remain owned by Warp. Each key press opens the selected config as a new tab in the active
 Warp window.
+
+## Break Timer
+
+The **Break Timer** action counts down a work interval (1–180 whole minutes, default 25, set in the
+Property Inspector). Press the key to start, press again to pause, and again to resume. When the time is
+up the key turns green and shows `Take a break`; it does not blink, alert, lock the screen, or block
+input, and the next interval starts only when you press the key. The countdown is anchored to an
+absolute end time, so after the machine wakes from sleep the key shows the true remaining time — or the
+break, if the end passed while asleep. Timer state is held in memory only: restarting the plugin or
+changing the interval returns the key to `READY`. Nothing about keystrokes or app usage is recorded.

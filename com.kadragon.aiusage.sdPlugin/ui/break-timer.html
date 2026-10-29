@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+	<head lang="en">
+		<meta charset="utf-8" />
+		<!-- Vendored (sdpi-components v4.0.1) so the inspector works offline and pins the exact version. -->
+		<script src="sdpi-components.js"></script>
+	</head>
+	<body>
+		<sdpi-item label="Interval (min)">
+			<sdpi-textfield setting="intervalMinutes" default="25" pattern="[0-9]{1,3}" placeholder="25"></sdpi-textfield>
+		</sdpi-item>
+		<p class="sdpi-info">
+			Work interval in whole minutes, from 1 to 180; anything else uses 25. Press the key to start,
+			pause, or resume. When the time is up the key shows "Take a break" and waits for a press to
+			start the next interval; it never locks the screen or blocks input. Changing the interval
+			resets the key, and so does restarting Stream Deck.
+		</p>
+	</body>
+</html>

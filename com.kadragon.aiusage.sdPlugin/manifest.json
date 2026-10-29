@@ -1,6 +1,6 @@
 {
 	"Name": "Dev Toolkit",
-	"Version": "0.9.1.0",
+	"Version": "0.10.0.0",
 	"Author": "kadragon",
 	"Actions": [
 		{
@@ -60,12 +60,28 @@
 					"TitleAlignment": "middle"
 				}
 			]
+		},
+		{
+			"Name": "Break Timer",
+			"UUID": "com.kadragon.aiusage.break-timer",
+			"Icon": "imgs/actions/break-timer/icon",
+			"Tooltip": "Counts down a work interval and shows when to take a break, without interrupting work.",
+			"PropertyInspectorPath": "ui/break-timer.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/break-timer/key",
+					"TitleAlignment": "middle"
+				}
+			]
 		}
 	],
 	"Category": "Dev Toolkit",
 	"CategoryIcon": "imgs/plugin/category-icon",
 	"CodePath": "bin/plugin.js",
-	"Description": "Shows AI weekly usage, local Windows system metrics, and validated Warp Tab Config launchers.",
+	"Description": "Shows AI weekly usage, local Windows system metrics, validated Warp Tab Config launchers, and a break timer.",
 	"Icon": "imgs/plugin/marketplace",
 	"SDKVersion": 3,
 	"Software": {

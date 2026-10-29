@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatSystemTemperature, renderKey, renderSystemMonitor, systemHeaderLabel, systemMetricProgress, systemMonitorAccent, systemStatusLabel } from "../src/render";
+import { formatBreakTimer, formatSystemTemperature, renderBreakTimerKey, renderKey, renderSystemMonitor, systemHeaderLabel, systemMetricProgress, systemMonitorAccent, systemStatusLabel } from "../src/render";
 
 function decodeImage(image: string): string {
 	return decodeURIComponent(image.slice(image.indexOf(",") + 1));
@@ -99,4 +99,35 @@ test("a stale reading is visibly aged on both the gauge and the value", () => {
 		systemMonitorAccent({ metric: "cpu", value: 90, temperatureC: 40 })
 	);
 	assert.match(stale, /STALE/);
+});
+
+test("break timer face labels every phase in English and never animates", () => {
+	const idle = decodeImage(renderBreakTimerKey({ phase: "idle" }, 25 * 60_000));
+	assert.match(idle, />READY</);
+	assert.match(idle, />25:00</);
+
+	const running = decodeImage(renderBreakTimerKey({ phase: "running", endsAt: 0, remainingMs: 61_500 }, 25 * 60_000));
+	assert.match(running, />FOCUS</);
+	assert.match(running, />1:02</);
+
+	const paused = decodeImage(renderBreakTimerKey({ phase: "paused", remainingMs: 15 * 60_000 }, 25 * 60_000));
+	assert.match(paused, />PAUSED</);
+	assert.match(paused, />15:00</);
+
+	const rest = decodeImage(renderBreakTimerKey({ phase: "break" }, 25 * 60_000));
+	assert.match(rest, />BREAK</);
+	assert.match(rest, />Take a break</);
+
+	// A calm face: no SVG animation on any phase.
+	for (const face of [idle, running, paused, rest]) {
+		assert.doesNotMatch(face, /<animate|<set /);
+	}
+});
+
+test("break timer countdown rounds up so a fresh cycle shows the full interval", () => {
+	assert.equal(formatBreakTimer(25 * 60_000), "25:00");
+	assert.equal(formatBreakTimer(59_001), "1:00");
+	assert.equal(formatBreakTimer(1), "0:01");
+	assert.equal(formatBreakTimer(180 * 60_000), "180:00");
+	assert.equal(formatBreakTimer(-5), "0:00");
 });
