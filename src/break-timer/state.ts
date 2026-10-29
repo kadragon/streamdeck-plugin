@@ -26,7 +26,8 @@ const MAX_INTERVAL_MINUTES = 180;
 
 /** Accepts an integer number of minutes from the Property Inspector, which may arrive as a string. */
 export function normalizeIntervalMinutes(value: unknown): number {
-	const minutes = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
+	// Only plain decimal digits count: `Number()` would also accept "1e2", "0x1F", or "60.0".
+	const minutes = typeof value === "string" ? (/^\d{1,3}$/.test(value.trim()) ? Number(value.trim()) : undefined) : value;
 	if (typeof minutes !== "number" || !Number.isInteger(minutes) || minutes < MIN_INTERVAL_MINUTES || minutes > MAX_INTERVAL_MINUTES) {
 		return DEFAULT_INTERVAL_MINUTES;
 	}

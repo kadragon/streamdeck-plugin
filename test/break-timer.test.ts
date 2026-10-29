@@ -59,4 +59,7 @@ test("interval minutes accept integers 1-180 and fall back to the default otherw
 	assert.equal(normalizeIntervalMinutes(Number.NaN), 25);
 	assert.equal(normalizeIntervalMinutes(""), 25);
 	assert.equal(normalizeIntervalMinutes("abc"), 25);
+	assert.equal(normalizeIntervalMinutes("1e2"), 25);
+	assert.equal(normalizeIntervalMinutes("0x1F"), 25);
+	assert.equal(normalizeIntervalMinutes("60.0"), 25);
 });
