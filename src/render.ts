@@ -1,3 +1,4 @@
+import type { BreakTimerView } from "./break-timer/state";
 import type { UsageSource } from "./usage/types";
 import { normalizeDiskDrive, type SystemMetricKind } from "./metrics/types";
 
@@ -197,6 +198,47 @@ ${labelMarkup}
 </svg>`;
 
 	return `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
+}
+
+/**
+ * Per-phase wording and colour of the break timer key.
+ *
+ * The break face is a steady colour change, never a blink or alert: the key reminds, it does not
+ * interrupt.
+ */
+const BREAK_TIMER_PHASES: Record<BreakTimerView["phase"], { header: string; footer: string; accent: string; background: string }> = {
+	idle: { header: "READY", footer: "Press to start", accent: "#7E9DBA", background: "#0B1220" },
+	running: { header: "FOCUS", footer: "Press to pause", accent: SYSTEM_NEUTRAL_COLOR, background: SYSTEM_NEUTRAL_BACKGROUND },
+	paused: { header: "PAUSED", footer: "Press to resume", accent: SYSTEM_AMBER_COLOR, background: "#2A2414" },
+	break: { header: "BREAK", footer: "Press for next", accent: SYSTEM_GOOD_COLOR, background: SYSTEM_GOOD_BACKGROUND }
+};
+
+/** Builds the break timer key face; `intervalMs` is what an idle key would count down from. */
+export function renderBreakTimerKey(view: BreakTimerView, intervalMs: number): string {
+	const phase = BREAK_TIMER_PHASES[view.phase];
+	const value = view.phase === "break" ? "Take a break" : formatBreakTimer(view.phase === "idle" ? intervalMs : view.remainingMs);
+	const valueSize = view.phase === "break" ? fitFontSize(value.length, 22, 16) : fitFontSize(value.length, 44, 28);
+	const valueColor = view.phase === "idle" || view.phase === "paused" ? "#9AA0A8" : "#F2F4F7";
+
+	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
+<rect width="${SIZE}" height="${SIZE}" fill="${phase.background}"/>
+<rect x="8" y="8" width="128" height="128" rx="14" fill="#0B1220" opacity="0.52" stroke="${phase.accent}" stroke-width="2"/>
+<g font-family="${KEY_FONT_FAMILY}" text-anchor="middle">
+<text x="72" y="${SYSTEM_HEADER_BASELINE}" fill="${phase.accent}" font-size="21" font-weight="700" letter-spacing="1.2">${escapeText(phase.header)}</text>
+<text x="72" y="${SYSTEM_VALUE_BASELINE}" fill="${valueColor}" font-size="${valueSize}" font-weight="700" style="font-variant-numeric:tabular-nums" font-feature-settings="'tnum'">${escapeText(value)}</text>
+<text x="72" y="${SYSTEM_FOOTER_BASELINE - 6}" fill="#9AA0A8" font-size="${fitFontSize(phase.footer.length, 14, 11)}" font-weight="600">${escapeText(phase.footer)}</text>
+</g>
+</svg>`;
+
+	return `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
+}
+
+/** Formats a remaining duration as `m:ss`, rounding up so a fresh cycle reads as the full interval. */
+export function formatBreakTimer(remainingMs: number): string {
+	const totalSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+	const minutes = Math.floor(totalSeconds / 60);
+	const seconds = totalSeconds % 60;
+	return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 function splitWarpTabLabel(value: string | undefined): string[] {
