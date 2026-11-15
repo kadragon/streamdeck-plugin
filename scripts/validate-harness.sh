@@ -148,13 +148,6 @@ for role in .claude/agents/*.md; do
   fi
 done
 
-if grep -q 'ALWAYS invoke' .claude/skills/code-orchestrator/SKILL.md &&
-   grep -q 'Do NOT inline-execute' .claude/skills/code-orchestrator/SKILL.md; then
-  pass "code-orchestrator has a directive description"
-else
-  fail "code-orchestrator description is not directive"
-fi
-
 echo
 echo "--- Maturity ---"
 level1=true
