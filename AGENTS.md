@@ -32,7 +32,7 @@ Inline is default. Apply the global delegation bar: delegate when work involves 
 | Backlog item has an approved Sprint Contract spanning at least 3 files or 3 independent units | `implementer` | sub-agent | Optional |
 | Diff spans at least 3 files or changes `manifest.json`, `rollup.config.mjs`, or `tsconfig.json` | `qa-verifier` | sub-agent | Optional |
 
-Use `code-orchestrator` for qualifying code work. No trigger router, critical-path gate, or Agent Teams is installed; add one only after measured failure evidence. Spawn prompts require Objective, Output format, Tools to use, and Boundaries.
+No trigger router, critical-path gate, or Agent Teams is installed; add one only after measured failure evidence. Spawn prompts require Objective, Output format, Tools to use, and Boundaries.
 
 <!-- harness:verbatim — mandated block, exempt from the non-inferability filter. Do not trim or paraphrase. -->
 ## Token Economy
