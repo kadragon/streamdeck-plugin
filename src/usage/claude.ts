@@ -19,6 +19,8 @@ import {
  */
 export const DEFAULT_CLAUDE_DIR = path.join(os.homedir(), ".claude", "ai-usage");
 
+const HERDR_SNAPSHOT = path.join(os.homedir(), ".config", "herdr-app", "data", "account-usage-claude.json");
+
 /** Latest observation. */
 const SNAPSHOT_FILE = "claude.json";
 
@@ -29,10 +31,46 @@ const HISTORY_FILE = "claude-history.jsonl";
 const MAX_HISTORY_LINES = 400;
 
 /**
- * Reads the weekly rate-limit percentage from the Claude Code status-line snapshot.
+ * Reads the newest weekly rate-limit observation captured by a Claude Code status line.
  */
-export async function readClaudeUsage(dir = DEFAULT_CLAUDE_DIR): Promise<UsageReading> {
-	const snapshotPath = path.join(dir, SNAPSHOT_FILE);
+export async function readClaudeUsage(
+	dir = DEFAULT_CLAUDE_DIR,
+	herdrSnapshotPath = dir === DEFAULT_CLAUDE_DIR ? HERDR_SNAPSHOT : undefined
+): Promise<UsageReading> {
+	const herdr = herdrSnapshotPath === undefined ? undefined : await readHerdrSnapshot(herdrSnapshotPath);
+	try {
+		const wrapper = await readWrapperSnapshot(path.join(dir, SNAPSHOT_FILE));
+		if (herdr !== undefined && herdr.observedAt > wrapper.observedAt) {
+			return herdr;
+		}
+		return { ...wrapper, history: await readHistory(path.join(dir, HISTORY_FILE)) };
+	} catch (error) {
+		if (herdr !== undefined && error instanceof NoUsageDataError) {
+			return herdr;
+		}
+		throw error;
+	}
+}
+
+async function readHerdrSnapshot(snapshotPath: string): Promise<UsageReading | undefined> {
+	let snapshot: { used?: unknown; reset?: unknown; observed?: unknown } | null;
+	try {
+		snapshot = JSON.parse(await fs.readFile(snapshotPath, "utf8"));
+	} catch {
+		return undefined;
+	}
+
+	// The Herdr status-line capture stores both timestamps in epoch seconds.
+	const observedAt = typeof snapshot?.observed === "number" ? parseUsageTimestamp(snapshot.observed * 1000) : undefined;
+	const resetsAt = typeof snapshot?.reset === "number" ? parseResetTimestamp(snapshot.reset) : undefined;
+	if (!isUsagePercent(snapshot?.used) || observedAt === undefined || resetsAt === undefined) {
+		return undefined;
+	}
+
+	return { usedPercent: snapshot.used, observedAt, resetsAt, history: [] };
+}
+
+async function readWrapperSnapshot(snapshotPath: string): Promise<Omit<UsageReading, "history">> {
 
 	let raw: string;
 	try {
@@ -63,8 +101,7 @@ export async function readClaudeUsage(dir = DEFAULT_CLAUDE_DIR): Promise<UsageRe
 	return {
 		usedPercent: weekly.used_percentage,
 		resetsAt: parseResetTimestamp(weekly.resets_at),
-		observedAt,
-		history: await readHistory(path.join(dir, HISTORY_FILE))
+		observedAt
 	};
 }
 

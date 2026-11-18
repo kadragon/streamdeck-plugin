@@ -65,7 +65,9 @@ plugin -> actions -> render
 
 ## Data Access
 
-Claude data comes from `~/.claude/ai-usage/claude.json` and `claude-history.jsonl`. Codex data comes from
+Claude uses the newest valid status-line observation from `~/.claude/ai-usage/claude.json` or Herdr's
+`~/.config/herdr-app/data/account-usage-claude.json`. Only the wrapper snapshot uses its adjacent
+`claude-history.jsonl` for burn-rate estimates. Codex data comes from
 `~/.codex/sessions/**/rollout-*.jsonl` plus one usage-only endpoint — `GET
 https://chatgpt.com/backend-api/wham/usage`, the same request the Codex CLI polls — authorised with the
 user's own local credentials from `~/.codex/auth.json`. The endpoint supplies the current percentage and
