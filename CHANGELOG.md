@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- [done] Decide: keep Claude usage on status-line snapshots (option A) (2026-11-18) → docs/design/claude-live-usage.md
 - [done] Spike: Claude live usage endpoint (/api/oauth/usage) findings (2026-11-18) → docs/design/claude-live-usage.md
 - [done] Queue HC focus presses, drop stale focus after keys disappear, honour HERDR_APP_HOME (2026-11-18)
 - [done] Replace Warp launcher with HC Agent Status key (ai-usage-streamdeck v0.11.0) (2026-11-18)

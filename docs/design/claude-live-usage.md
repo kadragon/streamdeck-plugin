@@ -1,6 +1,9 @@
 # Claude Live Usage Endpoint — Spike Findings
 
-Status: spike complete, implementation not approved. Date: 2026-11-18.
+Status: decided — option A (status-line snapshots only); no live client. Date: 2026-11-18.
+
+Reopen only if stale Claude readings between sessions become a real problem; start from option C's
+unattended `get_usage` check under *Unknowns*.
 
 ## Question
 
