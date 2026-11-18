@@ -1,5 +1,5 @@
 import type { BreakTimerView } from "./break-timer/state";
-import type { HcAgentCounts } from "./hc/status";
+import type { HcAgentStatusReading, HcDisplayMode } from "./hc/status";
 import { normalizeDiskDrive, type SystemMetricKind } from "./metrics/types";
 import type { UsageSource } from "./usage/types";
 
@@ -166,22 +166,20 @@ ${renderSystemTemperature(face.metric, face.temperatureC, face.status)}
 	return `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
 }
 
-/** Renders HC counts, reserving dashes for an unavailable reading. */
-export function renderHcAgentKey(counts: HcAgentCounts | undefined): string {
-	const working = String(counts?.working ?? "--");
-	const waiting = String(counts?.waiting ?? "--");
-	const waitingColor = counts && counts.waiting > 0 ? SYSTEM_AMBER_COLOR : "#F2F4F7";
+/** Renders the selected HC count, reserving dashes for an unavailable reading. */
+export function renderHcAgentKey(mode: HcDisplayMode, reading: HcAgentStatusReading | undefined): string {
+	const isWaiting = mode === "waiting";
+	const count = reading?.[mode].length;
+	const value = String(count ?? "--");
+	const accent = isWaiting ? SYSTEM_AMBER_COLOR : SYSTEM_GOOD_COLOR;
+	const valueColor = count ? accent : "#F2F4F7";
 
 	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
 <rect width="${SIZE}" height="${SIZE}" fill="#0B1220"/>
 <rect x="8" y="8" width="128" height="128" rx="14" fill="${SYSTEM_NEUTRAL_BACKGROUND}" stroke="#29415D" stroke-width="2"/>
-<path d="M72 53v64" stroke="#29415D" stroke-width="2"/>
 <g font-family="${KEY_FONT_FAMILY}" text-anchor="middle" font-weight="700">
-<text x="72" y="39" fill="#E0E9F4" font-size="18">HC AGENTS</text>
-<text x="41" y="90" fill="#F2F4F7" font-size="${fitFontSize(working.length, 34, 12, 54)}">${working}</text>
-<text x="103" y="90" fill="${waitingColor}" font-size="${fitFontSize(waiting.length, 34, 12, 54)}">${waiting}</text>
-<text x="41" y="114" fill="#A9B9CE" font-size="11">RUNNING</text>
-<text x="103" y="114" fill="${waitingColor}" font-size="11">WAITING</text>
+<text x="72" y="89" fill="${valueColor}" font-size="${fitFontSize(value.length, 72, 14)}">${value}</text>
+<text x="72" y="117" fill="${accent}" font-size="16">${isWaiting ? "WAITING" : "RUNNING"}</text>
 </g>
 </svg>`;
 	return `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;

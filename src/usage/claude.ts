@@ -19,6 +19,8 @@ import {
  */
 export const DEFAULT_CLAUDE_DIR = path.join(os.homedir(), ".claude", "ai-usage");
 
+const HERDR_SNAPSHOT = path.join(os.homedir(), ".config", "herdr-app", "data", "account-usage-claude.json");
+
 /** Latest observation. */
 const SNAPSHOT_FILE = "claude.json";
 
@@ -28,11 +30,55 @@ const HISTORY_FILE = "claude-history.jsonl";
 /** Older history adds nothing to the estimate and the file is trimmed by the script anyway. */
 const MAX_HISTORY_LINES = 400;
 
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
 /**
- * Reads the weekly rate-limit percentage from the Claude Code status-line snapshot.
+ * Reads the newest weekly rate-limit observation captured by a Claude Code status line.
  */
-export async function readClaudeUsage(dir = DEFAULT_CLAUDE_DIR): Promise<UsageReading> {
-	const snapshotPath = path.join(dir, SNAPSHOT_FILE);
+export async function readClaudeUsage(
+	dir = DEFAULT_CLAUDE_DIR,
+	herdrSnapshotPath = dir === DEFAULT_CLAUDE_DIR ? HERDR_SNAPSHOT : undefined
+): Promise<UsageReading> {
+	const herdr = herdrSnapshotPath === undefined ? undefined : await readHerdrSnapshot(herdrSnapshotPath);
+	let latest: Omit<UsageReading, "history">;
+	try {
+		const wrapper = await readWrapperSnapshot(path.join(dir, SNAPSHOT_FILE));
+		latest = herdr !== undefined && herdr.observedAt > wrapper.observedAt ? herdr : wrapper;
+	} catch (error) {
+		if (herdr === undefined || !(error instanceof NoUsageDataError)) {
+			throw error;
+		}
+		latest = herdr;
+	}
+	// The wrapper history still drives the burn-rate estimate when Herdr holds the newer reading, but a
+	// stale wrapper can hold samples from an earlier window that the monotonic reset heuristic cannot see.
+	const history = await readHistory(path.join(dir, HISTORY_FILE));
+	const windowStart = latest.resetsAt === undefined ? undefined : latest.resetsAt.getTime() - WEEK_MS;
+	return {
+		...latest,
+		history: windowStart === undefined ? history : history.filter((sample) => sample.at.getTime() >= windowStart)
+	};
+}
+
+async function readHerdrSnapshot(snapshotPath: string): Promise<Omit<UsageReading, "history"> | undefined> {
+	let snapshot: { used?: unknown; reset?: unknown; observed?: unknown } | null;
+	try {
+		snapshot = JSON.parse(await fs.readFile(snapshotPath, "utf8"));
+	} catch {
+		return undefined;
+	}
+
+	// The Herdr status-line capture stores both timestamps in epoch seconds.
+	const observedAt = typeof snapshot?.observed === "number" ? parseUsageTimestamp(snapshot.observed * 1000) : undefined;
+	const resetsAt = typeof snapshot?.reset === "number" ? parseResetTimestamp(snapshot.reset) : undefined;
+	if (!isUsagePercent(snapshot?.used) || observedAt === undefined || resetsAt === undefined) {
+		return undefined;
+	}
+
+	return { usedPercent: snapshot.used, observedAt, resetsAt };
+}
+
+async function readWrapperSnapshot(snapshotPath: string): Promise<Omit<UsageReading, "history">> {
 
 	let raw: string;
 	try {
@@ -63,8 +109,7 @@ export async function readClaudeUsage(dir = DEFAULT_CLAUDE_DIR): Promise<UsageRe
 	return {
 		usedPercent: weekly.used_percentage,
 		resetsAt: parseResetTimestamp(weekly.resets_at),
-		observedAt,
-		history: await readHistory(path.join(dir, HISTORY_FILE))
+		observedAt
 	};
 }
 

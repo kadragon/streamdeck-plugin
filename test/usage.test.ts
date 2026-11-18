@@ -45,6 +45,45 @@ test("Claude reader rejects invalid percentage, timestamp, and reset values", as
 	}
 });
 
+test("Claude reader uses the newest valid weekly snapshot from Herdr or the wrapper", async () => {
+	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "streamdeck-claude-"));
+	try {
+		const wrapper = path.join(directory, "claude.json");
+		const herdr = path.join(directory, "account-usage-claude.json");
+		const observed = Date.parse("2026-11-18T05:34:21.100Z") / 1000;
+		const reset = Date.parse("2026-11-25T05:00:00Z") / 1000;
+		const read = () => readClaudeUsage(directory, herdr);
+		const writeWrapper = (updated_at: string) => fs.writeFile(wrapper, JSON.stringify({
+			updated_at, seven_day: { used_percentage: 29 }
+		}));
+		const writeHerdr = (used: unknown, at: unknown) => fs.writeFile(herdr, JSON.stringify({
+			used, reset, observed: at
+		}));
+		await writeWrapper("2026-10-12T00:29:50Z");
+		await writeHerdr(1, observed);
+		assert.deepEqual(await read(), {
+			usedPercent: 1, observedAt: new Date(observed * 1000), resetsAt: new Date(reset * 1000), history: []
+		});
+		await fs.writeFile(path.join(directory, "claude-history.jsonl"), [
+			{ updated_at: "2026-10-12T00:29:50Z", seven_day: { used_percentage: 29 } },
+			{ updated_at: "2026-11-18T05:00:00Z", seven_day: { used_percentage: 1 } }
+		].map((record) => JSON.stringify(record)).join("\n"));
+		// Samples from before the current weekly window are dropped; current-window history is kept.
+		assert.deepEqual((await read()).history, [{ at: new Date("2026-11-18T05:00:00Z"), usedPercent: 1 }]);
+		await fs.unlink(wrapper);
+		assert.equal((await read()).usedPercent, 1);
+		await writeWrapper("2026-11-18T05:35:00Z");
+		assert.equal((await read()).usedPercent, 29);
+		await writeWrapper("2026-10-12T00:29:50Z");
+		await writeHerdr(null, observed);
+		assert.equal((await read()).usedPercent, 29);
+		await writeHerdr(1, "invalid");
+		assert.equal((await read()).usedPercent, 29);
+	} finally {
+		await fs.rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("Codex reader drops invalid observations and preserves valid reset time", async () => {
 	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "streamdeck-codex-"));
 	try {

@@ -49,7 +49,8 @@
 			"Name": "HC Agent Status",
 			"UUID": "com.kadragon.aiusage.hc-agent-status",
 			"Icon": "imgs/actions/usage/icon",
-			"Tooltip": "Shows running and input-waiting HC agents. Press to refresh.",
+			"Tooltip": "Shows running or waiting HC agents. Press to cycle through matching sessions in Herdr.",
+			"PropertyInspectorPath": "ui/hc-agent-status.html",
 			"Controllers": [
 				"Keypad"
 			],
