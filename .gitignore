@@ -9,6 +9,3 @@ node_modules/
 .claude/tmp/
 tools/.sweep-stamp
 .agents/.maintenance-stamp
-
-# graft's local graph cache — regenerable, not committed (run `graft build`).
-/graft/

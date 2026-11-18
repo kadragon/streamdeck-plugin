@@ -1,6 +1,7 @@
 import type { BreakTimerView } from "./break-timer/state";
-import type { UsageSource } from "./usage/types";
+import type { HcAgentCounts } from "./hc/status";
 import { normalizeDiskDrive, type SystemMetricKind } from "./metrics/types";
+import type { UsageSource } from "./usage/types";
 
 export type { SystemMetricKind } from "./metrics/types";
 
@@ -103,11 +104,6 @@ export type KeyFace = {
 	warn?: boolean;
 };
 
-export type WarpTabKeyFace = {
-	/** Selected filename stem, or `undefined` while the property inspector has no selection. */
-	label?: string;
-};
-
 export type SystemMonitorFace = {
 	metric: SystemMetricKind;
 	value?: number;
@@ -170,33 +166,24 @@ ${renderSystemTemperature(face.metric, face.temperatureC, face.status)}
 	return `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
 }
 
-/** Builds a Warp Tab Config key face with its label positioned inside the artwork. */
-export function renderWarpTabKey(face: WarpTabKeyFace): string {
-	const lines = splitWarpTabLabel(face.label);
-	const longestLine = Math.max(...lines.map((line) => line.length));
-	const labelSize = fitFontSize(longestLine, 16, 9);
-	const labelMarkup = lines
-		.map((line, index) => `<text x="72" y="${lines.length === 1 ? 123 : 114 + index * 17}" fill="#F2F4F7" font-size="${labelSize}" font-weight="700" letter-spacing="0.8">${escapeText(line)}</text>`)
-		.join("\n");
+/** Renders HC counts, reserving dashes for an unavailable reading. */
+export function renderHcAgentKey(counts: HcAgentCounts | undefined): string {
+	const working = String(counts?.working ?? "--");
+	const waiting = String(counts?.waiting ?? "--");
+	const waitingColor = counts && counts.waiting > 0 ? SYSTEM_AMBER_COLOR : "#F2F4F7";
 
 	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
 <rect width="${SIZE}" height="${SIZE}" fill="#0B1220"/>
-<g stroke-linejoin="round">
-<rect x="11" y="15" width="96" height="72" rx="8" fill="#13213A" stroke="#2B67D1" stroke-width="2" opacity="0.78"/>
-<rect x="23" y="23" width="108" height="75" rx="8" fill="#122033" stroke="#39D5FF" stroke-width="2"/>
-<path d="M23 42H131" stroke="#29415D" stroke-width="2"/>
-<circle cx="36" cy="32" r="3" fill="#FFB84D"/>
-<circle cx="46" cy="32" r="3" fill="#5EE6FF"/>
-<circle cx="56" cy="32" r="3" fill="#2B67D1"/>
-<path d="M42 61L51 68L42 75" fill="none" stroke="#5EE6FF" stroke-width="4"/>
-<path d="M57 75H75" stroke="#FFB84D" stroke-width="4"/>
-</g>
-<g font-family="${KEY_FONT_FAMILY}" text-anchor="middle">
-<text x="72" y="93" fill="#7E9DBA" font-size="10" font-weight="600" letter-spacing="1.5">WARP TAB</text>
-${labelMarkup}
+<rect x="8" y="8" width="128" height="128" rx="14" fill="${SYSTEM_NEUTRAL_BACKGROUND}" stroke="#29415D" stroke-width="2"/>
+<path d="M72 53v64" stroke="#29415D" stroke-width="2"/>
+<g font-family="${KEY_FONT_FAMILY}" text-anchor="middle" font-weight="700">
+<text x="72" y="39" fill="#E0E9F4" font-size="18">HC AGENTS</text>
+<text x="41" y="90" fill="#F2F4F7" font-size="${fitFontSize(working.length, 34, 12, 54)}">${working}</text>
+<text x="103" y="90" fill="${waitingColor}" font-size="${fitFontSize(waiting.length, 34, 12, 54)}">${waiting}</text>
+<text x="41" y="114" fill="#A9B9CE" font-size="11">RUNNING</text>
+<text x="103" y="114" fill="${waitingColor}" font-size="11">WAITING</text>
 </g>
 </svg>`;
-
 	return `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
 }
 
@@ -241,33 +228,6 @@ export function formatBreakTimer(remainingMs: number): string {
 	return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-function splitWarpTabLabel(value: string | undefined): string[] {
-	const normalized = value?.trim().replace(/[_-]+/g, " ").replace(/\s+/g, " ").toUpperCase() || "SELECT CONFIG";
-	const words = normalized.split(" ");
-	if (words.length <= 1) {
-		return [normalized];
-	}
-
-	const lines: string[] = [];
-	let current = words[0] ?? normalized;
-	for (const word of words.slice(1)) {
-		const candidate = `${current} ${word}`;
-		if (candidate.length <= 14 || lines.length > 0) {
-			current = candidate;
-			continue;
-		}
-
-		lines.push(current);
-		current = word;
-	}
-
-	if (current !== "") {
-		lines.push(current);
-	}
-
-	return lines.length > 0 ? lines : [normalized];
-}
-
 /**
  * Draws the percentage, or a question mark when there is nothing to show.
  *
@@ -304,13 +264,13 @@ function renderCaption(caption: string, color: string): string {
 /**
  * Scales a font size down until the given number of characters fits within {@link TEXT_MAX_WIDTH}.
  */
-function fitFontSize(charCount: number, preferred: number, minimum: number): number {
+function fitFontSize(charCount: number, preferred: number, minimum: number, maxWidth = TEXT_MAX_WIDTH): number {
 	const width = charCount * CHAR_WIDTH_RATIO * preferred;
-	if (width <= TEXT_MAX_WIDTH) {
+	if (width <= maxWidth) {
 		return preferred;
 	}
 
-	return round(Math.max(minimum, (preferred * TEXT_MAX_WIDTH) / width));
+	return round(Math.max(minimum, (preferred * maxWidth) / width));
 }
 
 /**

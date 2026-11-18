@@ -1,18 +1,18 @@
 import streamDeck from "@elgato/streamdeck";
 
 import { BreakTimer } from "./actions/break-timer";
+import { HcAgentStatus } from "./actions/hc-agent-status";
 import { SystemMonitor } from "./actions/system-metrics";
 import { WeeklyLimit } from "./actions/weekly-limit";
-import { WarpTabConfig } from "./actions/warp-tab-config";
 
 streamDeck.logger.setLevel("info");
 
 const weeklyLimit = new WeeklyLimit();
-const warpTabConfig = new WarpTabConfig();
+const hcAgentStatus = new HcAgentStatus();
 const systemMonitor = new SystemMonitor();
 const breakTimer = new BreakTimer();
 streamDeck.actions.registerAction(weeklyLimit);
-streamDeck.actions.registerAction(warpTabConfig);
+streamDeck.actions.registerAction(hcAgentStatus);
 streamDeck.actions.registerAction(systemMonitor);
 streamDeck.actions.registerAction(breakTimer);
 
@@ -21,6 +21,7 @@ streamDeck.system.onSystemDidWakeUp(() => {
 	weeklyLimit.refreshAll().catch((err) => streamDeck.logger.error("wake refresh failed", err));
 	systemMonitor.refreshAll({ force: true }).catch((err) => streamDeck.logger.error("system monitor wake refresh failed", err));
 	breakTimer.refreshAll().catch((err) => streamDeck.logger.error("break timer wake refresh failed", err));
+	hcAgentStatus.refreshAll().catch((err) => streamDeck.logger.error("HC status wake refresh failed", err));
 });
 
 streamDeck.connect();
