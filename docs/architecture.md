@@ -21,7 +21,7 @@ src/actions/hc-agent-status.ts # Visible-key polling and HC status rendering
 src/render.ts                  # Pure SVG key-face rendering and time formatting
 src/metrics/windows.ts         # Local PowerShell/Get-Counter and nvidia-smi reader
 src/metrics/types.ts           # Supported local system metric names
-src/hc/status.ts               # Local HC terminal-list reader and count validation
+src/hc/status.ts               # Local HC status reader and Herdr terminal focus command
 src/usage/types.ts             # Reading/sample contracts and no-data error
 src/usage/burn-rate.ts         # Reset-aware burn-rate projection
 src/usage/claude.ts            # Claude snapshot/history file reader
@@ -53,7 +53,8 @@ plugin -> actions -> render
 
 - `WeeklyLimit` is the only action-level coordinator for settings, refresh cadence, and key updates.
 - `SystemMonitor` is the Windows-only action-level coordinator for metric refresh and key/encoder updates.
-- `HcAgentStatus` shares one local HC read across visible keys and renders separate working and blocked counts.
+- `HcAgentStatus` shares one local HC read across visible keys and renders the configured count per key.
+  Each display mode cycles focus independently through its matching live sessions in Herdr.
 - Usage readers return `UsageReading`; invalid or missing local data becomes `NoUsageDataError`.
 - `renderKey` accepts a `KeyFace` and returns an SVG data URI; user-controlled caption text is escaped.
 - The Property Inspector sends settings through Stream Deck events; the ticker uses the latest event payload rather than polling IPC.

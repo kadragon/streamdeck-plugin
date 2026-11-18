@@ -1,16 +1,38 @@
-import { action, SingletonAction, streamDeck, type WillAppearEvent } from "@elgato/streamdeck";
+import {
+	action,
+	SingletonAction,
+	streamDeck,
+	type DidReceiveSettingsEvent,
+	type KeyDownEvent,
+	type WillAppearEvent,
+	type WillDisappearEvent
+} from "@elgato/streamdeck";
 
-import { readHcAgentCounts } from "../hc/status";
+import { focusHcAgent, readHcAgentStatus, type HcAgentStatusReading, type HcDisplayMode } from "../hc/status";
 import { renderHcAgentKey } from "../render";
 
 const REFRESH_INTERVAL_MS = 5000;
 
+type HcSettings = { mode?: HcDisplayMode };
+
 @action({ UUID: "com.kadragon.aiusage.hc-agent-status" })
-export class HcAgentStatus extends SingletonAction {
+export class HcAgentStatus extends SingletonAction<HcSettings> {
+	readonly #modes = new Map<string, HcDisplayMode>();
 	#ticker?: NodeJS.Timeout;
 	#refreshing?: Promise<void>;
+	#focusing?: { mode: HcDisplayMode; task: Promise<void> };
+	readonly #lastFocused: Partial<Record<HcDisplayMode, string>> = {};
+	#reading?: HcAgentStatusReading;
 
-	override async onWillAppear(event: WillAppearEvent): Promise<void> {
+	constructor(
+		private readonly readStatus = readHcAgentStatus,
+		private readonly focusAgent = focusHcAgent
+	) {
+		super();
+	}
+
+	override async onWillAppear(event: WillAppearEvent<HcSettings>): Promise<void> {
+		this.#setMode(event.action.id, event.payload.settings);
 		if (event.action.isKey()) {
 			await event.action.setTitle("").catch((error) => streamDeck.logger.error("HC key title update failed", error));
 		}
@@ -22,15 +44,40 @@ export class HcAgentStatus extends SingletonAction {
 		await this.refreshAll();
 	}
 
-	override onWillDisappear(): void {
+	override onWillDisappear(event: WillDisappearEvent<HcSettings>): void {
+		this.#modes.delete(event.action.id);
 		if ([...this.actions].length === 0) {
 			clearInterval(this.#ticker);
 			this.#ticker = undefined;
 		}
 	}
 
-	override onKeyDown(): Promise<void> {
-		return this.refreshAll();
+	override async onDidReceiveSettings(event: DidReceiveSettingsEvent<HcSettings>): Promise<void> {
+		this.#setMode(event.action.id, event.payload.settings);
+		if (event.action.isKey()) {
+			await event.action.setImage(this.#image(event.action.id))
+				.catch((error) => streamDeck.logger.error("HC key mode render failed", error));
+		}
+	}
+
+	override async onKeyDown(event: KeyDownEvent<HcSettings>): Promise<void> {
+		const mode = this.#modes.get(event.action.id) ?? "running";
+		const pending = this.#focusing;
+		if (pending?.mode === mode) {
+			return pending.task;
+		}
+		const task = (pending?.task ?? Promise.resolve())
+			.then(() => this.#focusNextAgent(mode))
+			.catch((error: NodeJS.ErrnoException) => {
+				streamDeck.logger.error("HC agent focus failed", error.code ?? error.name);
+			})
+			.finally(() => {
+				if (this.#focusing?.task === task) {
+					this.#focusing = undefined;
+				}
+			});
+		this.#focusing = { mode, task };
+		await task;
 	}
 
 	async refreshAll(): Promise<void> {
@@ -44,19 +91,39 @@ export class HcAgentStatus extends SingletonAction {
 	}
 
 	async #refresh(): Promise<void> {
-		const counts = await readHcAgentCounts().catch((error: NodeJS.ErrnoException) => {
+		this.#reading = await this.readStatus().catch((error: NodeJS.ErrnoException) => {
 			// Do not log subprocess output, which can include terminal metadata.
 			streamDeck.logger.debug("HC terminal list unavailable", error.code ?? error.name);
 			return undefined;
 		});
-		const image = renderHcAgentKey(counts);
 		const results = await Promise.allSettled([...this.actions].map((visible) => (
-			visible.isKey() ? visible.setImage(image) : undefined
+			visible.isKey() ? visible.setImage(this.#image(visible.id)) : undefined
 		)));
 		for (const result of results) {
 			if (result.status === "rejected") {
 				streamDeck.logger.error("HC status render failed", result.reason);
 			}
 		}
+	}
+
+	async #focusNextAgent(mode: HcDisplayMode): Promise<void> {
+		await this.refreshAll();
+		const addresses = this.#reading?.[mode].filter((address) => address !== undefined) ?? [];
+		const previous = addresses.findIndex((address) => address === this.#lastFocused[mode]);
+		const next = addresses[previous + 1] ?? addresses[0];
+		if (next === undefined) {
+			delete this.#lastFocused[mode];
+			return;
+		}
+		await this.focusAgent(next);
+		this.#lastFocused[mode] = next;
+	}
+
+	#setMode(id: string, settings: HcSettings): void {
+		this.#modes.set(id, settings.mode === "waiting" ? "waiting" : "running");
+	}
+
+	#image(id: string): string {
+		return renderHcAgentKey(this.#modes.get(id) ?? "running", this.#reading);
 	}
 }

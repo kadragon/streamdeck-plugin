@@ -129,13 +129,15 @@ is read while it is asleep.
 
 ## HC Agent Status
 
-Add **HC Agent Status** to a Stream Deck key. It shows live HC agents reporting
-`working` under **RUNNING** and `blocked` under **WAITING**. Idle, finished and unreported
-sessions are excluded. The key updates every five seconds while visible, on wake and when pressed.
-A failed read shows `--` in both columns. Existing Warp keys need to be replaced with this action.
+Add **HC Agent Status** twice to show both counts. In each key's Property Inspector, set **Show**
+to **Running** or **Waiting**. Existing keys default to Running. Running counts live HC sessions
+reporting `working`; Waiting counts live `blocked`, `idle`, and `done` sessions. Press either key to
+focus a matching session in the running Herdr app. Repeated presses cycle through that key's sessions.
+The keys refresh every five seconds while visible,
+on wake and when pressed. A failed read displays `--`.
 
-Install Herdr Core and make `hc` available on the Stream Deck process's PATH. On Windows, the
-standard per-user location (`%LOCALAPPDATA%/Programs/herdr-core/hc.exe`) also works.
+Install Herdr Core and make `hc` available on the Stream Deck process's PATH. Terminal focus also
+requires `herdr-app` on PATH. On Windows, the standard per-user installations of both commands work.
 Run `hc ls --json` to verify the local CLI and see the terminal list the key reads.
 
 ## Break Timer
