@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import type { WillAppearEvent } from "@elgato/streamdeck";
+
+import { HcAgentStatus } from "../src/actions/hc-agent-status";
 import { parseHcAgentCounts } from "../src/hc/status";
 import { renderHcAgentKey } from "../src/render";
 
@@ -33,4 +36,22 @@ test("renders empty and unavailable counts distinctly", () => {
 	assert.equal(zero.match(/>0<\/text>/g)?.length, 2);
 	assert.equal(unavailable.match(/>--<\/text>/g)?.length, 2);
 	assert.match(active, />2<\/text>[\s\S]*>1<\/text>[\s\S]*>RUNNING<\/text>[\s\S]*>WAITING<\/text>/);
+});
+
+test("refreshes when the SDK rejects clearing the key title", async () => {
+	const action = new HcAgentStatus();
+	let refreshed = false;
+	action.refreshAll = async () => {
+		refreshed = true;
+	};
+	const event = {
+		action: {
+			isKey: () => true,
+			setTitle: async () => {
+				throw new Error("SDK title update failed");
+			}
+		}
+	} as unknown as WillAppearEvent;
+	await action.onWillAppear(event);
+	assert.equal(refreshed, true);
 });

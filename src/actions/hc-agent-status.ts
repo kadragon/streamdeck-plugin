@@ -12,7 +12,7 @@ export class HcAgentStatus extends SingletonAction {
 
 	override async onWillAppear(event: WillAppearEvent): Promise<void> {
 		if (event.action.isKey()) {
-			await event.action.setTitle("");
+			await event.action.setTitle("").catch((error) => streamDeck.logger.error("HC key title update failed", error));
 		}
 		if ([...this.actions].length > 0) {
 			this.#ticker ??= setInterval(() => {
