@@ -30,6 +30,8 @@ const HISTORY_FILE = "claude-history.jsonl";
 /** Older history adds nothing to the estimate and the file is trimmed by the script anyway. */
 const MAX_HISTORY_LINES = 400;
 
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
 /**
  * Reads the newest weekly rate-limit observation captured by a Claude Code status line.
  */
@@ -48,8 +50,14 @@ export async function readClaudeUsage(
 		}
 		latest = herdr;
 	}
-	// The wrapper history still drives the burn-rate estimate when Herdr holds the newer reading.
-	return { ...latest, history: await readHistory(path.join(dir, HISTORY_FILE)) };
+	// The wrapper history still drives the burn-rate estimate when Herdr holds the newer reading, but a
+	// stale wrapper can hold samples from an earlier window that the monotonic reset heuristic cannot see.
+	const history = await readHistory(path.join(dir, HISTORY_FILE));
+	const windowStart = latest.resetsAt === undefined ? undefined : latest.resetsAt.getTime() - WEEK_MS;
+	return {
+		...latest,
+		history: windowStart === undefined ? history : history.filter((sample) => sample.at.getTime() >= windowStart)
+	};
 }
 
 async function readHerdrSnapshot(snapshotPath: string): Promise<Omit<UsageReading, "history"> | undefined> {

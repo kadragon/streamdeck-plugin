@@ -30,3 +30,5 @@ Spec: `docs/design/system-monitor-ux.md`. Ordered; A1 precedes B1.
 ### PR #30 — Cycle through HC agent sessions from Stream Deck (2026-11-18)
 
 - [ ] [debt] Same-mode key presses while a focus is pending are collapsed, so a quick double press cannot skip to the next session; decide whether to queue them (source: code-review) — src/actions/hc-agent-status.ts:66
+- [ ] [debt] Resolve the Herdr home from `HERDR_APP_HOME` before falling back to `~/.config/herdr-app` when reading the Claude snapshot (source: codex) — src/usage/claude.ts:22
+- [ ] [debt] A queued focus press after every HC key disappears uses the cached list because `refreshAll()` skips the read; cancel it or require a fresh read (source: codex) — src/actions/hc-agent-status.ts:112

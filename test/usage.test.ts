@@ -64,10 +64,12 @@ test("Claude reader uses the newest valid weekly snapshot from Herdr or the wrap
 		assert.deepEqual(await read(), {
 			usedPercent: 1, observedAt: new Date(observed * 1000), resetsAt: new Date(reset * 1000), history: []
 		});
-		await fs.writeFile(path.join(directory, "claude-history.jsonl"), JSON.stringify({
-			updated_at: "2026-10-12T00:29:50Z", seven_day: { used_percentage: 29 }
-		}));
-		assert.deepEqual((await read()).history, [{ at: new Date("2026-10-12T00:29:50Z"), usedPercent: 29 }]);
+		await fs.writeFile(path.join(directory, "claude-history.jsonl"), [
+			{ updated_at: "2026-10-12T00:29:50Z", seven_day: { used_percentage: 29 } },
+			{ updated_at: "2026-11-18T05:00:00Z", seven_day: { used_percentage: 1 } }
+		].map((record) => JSON.stringify(record)).join("\n"));
+		// Samples from before the current weekly window are dropped; current-window history is kept.
+		assert.deepEqual((await read()).history, [{ at: new Date("2026-11-18T05:00:00Z"), usedPercent: 1 }]);
 		await fs.unlink(wrapper);
 		assert.equal((await read()).usedPercent, 1);
 		await writeWrapper("2026-11-18T05:35:00Z");
