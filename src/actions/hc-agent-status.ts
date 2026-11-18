@@ -20,7 +20,8 @@ export class HcAgentStatus extends SingletonAction<HcSettings> {
 	readonly #modes = new Map<string, HcDisplayMode>();
 	#ticker?: NodeJS.Timeout;
 	#refreshing?: Promise<void>;
-	#focusing?: { mode: HcDisplayMode; task: Promise<void> };
+	/** Tail of the press queue: every press focuses one session, in press order. */
+	#focusing: Promise<void> = Promise.resolve();
 	readonly #lastFocused: Partial<Record<HcDisplayMode, string>> = {};
 	#reading?: HcAgentStatusReading;
 
@@ -62,21 +63,12 @@ export class HcAgentStatus extends SingletonAction<HcSettings> {
 
 	override async onKeyDown(event: KeyDownEvent<HcSettings>): Promise<void> {
 		const mode = this.#modes.get(event.action.id) ?? "running";
-		const pending = this.#focusing;
-		if (pending?.mode === mode) {
-			return pending.task;
-		}
-		const task = (pending?.task ?? Promise.resolve())
+		const task = this.#focusing
 			.then(() => this.#focusNextAgent(mode))
 			.catch((error: NodeJS.ErrnoException) => {
 				streamDeck.logger.error("HC agent focus failed", error.code ?? error.name);
-			})
-			.finally(() => {
-				if (this.#focusing?.task === task) {
-					this.#focusing = undefined;
-				}
 			});
-		this.#focusing = { mode, task };
+		this.#focusing = task;
 		await task;
 	}
 
@@ -110,6 +102,10 @@ export class HcAgentStatus extends SingletonAction<HcSettings> {
 		// A tick already in flight read `hc ls` before this press; wait for it, then read again.
 		await this.#refreshing?.catch(() => undefined);
 		await this.refreshAll();
+		// With no key left, refreshAll() skipped the read and the cached list may be stale.
+		if ([...this.actions].length === 0) {
+			return;
+		}
 		const addresses = this.#reading?.[mode].filter((address) => address !== undefined) ?? [];
 		const previous = addresses.findIndex((address) => address === this.#lastFocused[mode]);
 		const next = addresses[previous + 1] ?? addresses[0];
