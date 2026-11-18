@@ -64,7 +64,9 @@ handles refresh itself.
 - **Undocumented.** `/api/oauth/usage` is an internal endpoint of Claude Code, not a public API;
   its query flags are experiment-gated and the shape can change without notice.
 - **Golden Principle 5.** Only `src/usage/codex-api.ts` may open a network client and hold a bearer
-  token, enforced by `npm run check:principles`. A direct client needs that principle widened to a
+  token. `npm run check:principles` enforces only the network-client half (it matches client call
+  shapes such as `fetch(`); reading or holding a credential is caught in review alone, and so is
+  spawning a child process that makes the call. A direct client needs the principle widened to a
   second module and a second secret.
 - **Token expiry.** No refresh in the plugin means the live read silently degrades to the snapshot
   path between Claude Code sessions — exactly when it would be most useful.
@@ -75,15 +77,19 @@ handles refresh itself.
 |---|---|---|---|
 | A. Keep status-line snapshots only | none | stale | none |
 | B. Direct `GET /api/oauth/usage` with the stored token | widen Principle 5 to a Claude API module | fresh until the token expires | medium |
-| C. `get_usage` via a spawned `claude` SDK process | none in the plugin (Claude Code makes the call) | fresh; Claude Code refreshes | medium–high, experimental protocol |
+| C. `get_usage` via a spawned `claude` SDK process | the plugin triggers egress through a child process; Principle 5 must be extended or explicitly waived, and `check:principles` cannot see it | expected fresh with Claude Code refreshing the token — unverified for unattended runs | medium–high, experimental protocol |
 
-Recommendation: C if live freshness is worth the process spawn; otherwise A. B is the closest
-mirror of the Codex path but carries both the policy change and the expiry gap.
+Recommendation: none of B or C is ready to pick. C avoids the plugin holding a token, but its
+deciding advantage — fresh readings and token refresh with no interactive session — is unverified,
+so first run the `get_usage` check under *Unknowns*. If it holds and the Principle 5 extension is
+acceptable, prefer C; otherwise stay on A. B is the closest mirror of the Codex path but carries
+both the policy change and the expiry gap.
 
 ## Unknowns
 
-- [unknown — send one authenticated request to verify] the live response matches the client schema.
+- [unknown — read a live `GET /api/oauth/usage` response to verify] the response matches the client
+  schema.
 - [unknown — read `~/.claude/.credentials.json` key names to verify] whether `expiresAt` is stored
   beside `accessToken`, which would let option B skip known-expired tokens.
-- [unknown — test `get_usage` against a spawned `claude` to verify] its latency and whether it works
-  without an interactive session.
+- [unknown — read a `get_usage` reply from a spawned `claude` to verify] its latency, whether it works
+  without an interactive session, and whether it refreshes an expired token.

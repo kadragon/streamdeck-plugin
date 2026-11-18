@@ -22,5 +22,5 @@ Spec: `docs/design/system-monitor-ux.md`. Ordered; A1 precedes B1.
 
 ## Deferred
 
-- [ ] [feat] Live Claude usage read — pick option A/B/C in `docs/design/claude-live-usage.md` (B widens Golden Principle 5 to a second bearer token) *(deferred: needs user decision)* — `src/usage/claude.ts`
+- [ ] [feat] Live Claude usage read — pick option A/B/C in `docs/design/claude-live-usage.md` (B and C both need Golden Principle 5 widened; C's unattended freshness is unverified) *(deferred: needs user decision)* — `src/usage/claude.ts`
 - [ ] [feat] Multi-metric key (2–3 readings on one 144×144 face) — rejected in the current spec on glanceability grounds; revisit only with hardware evidence
