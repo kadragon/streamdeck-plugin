@@ -8,7 +8,7 @@ endpoint below, called with your own local credentials.
 | --- | --- |
 | **Weekly Limit** | Shows how much of the weekly rate-limit allowance Claude Code or Codex CLI has consumed |
 | **System Monitor** | Shows local Windows CPU, RAM, disk, network, NVIDIA GPU, memory, and power metrics |
-| **Warp Tab Config** | Opens one of Warp's saved Tab Configs |
+| **HC Agent Status** | Shows running and input-waiting HC agents |
 | **Break Timer** | Counts down a work interval and shows when to take a break, without interrupting work |
 
 ## System Monitor (Windows)
@@ -127,14 +127,16 @@ press does not re-read. Defaults:
 Keys also refresh automatically when the machine wakes from sleep (`onSystemDidWakeUp`), since nothing
 is read while it is asleep.
 
-## Launch a Warp Tab Config
+## HC Agent Status
 
-The **Warp Tab Config** action opens one of Warp's saved `.toml` Tab Configs from a Stream Deck key.
-Choose the config in the action's Property Inspector; the list is read from Warp's local
-`tab_configs` directory and can be refreshed after config files change. The key opens the selected config
-through Warp's `warp://tab_config/<filename>` URI scheme, so the configured directory, shell, panes, and
-startup commands remain owned by Warp. Each key press opens the selected config as a new tab in the active
-Warp window.
+Add **HC Agent Status** to a Stream Deck key. It shows live HC agents reporting
+`working` under **RUNNING** and `blocked` under **WAITING**. Idle, finished and unreported
+sessions are excluded. The key updates every five seconds while visible, on wake and when pressed.
+A failed read shows `--` in both columns. Existing Warp keys need to be replaced with this action.
+
+Install Herdr Core and make `hc` available on the Stream Deck process's PATH. On Windows, the
+standard per-user location (`%LOCALAPPDATA%/Programs/herdr-core/hc.exe`) also works.
+Run `hc ls --json` to verify the local CLI and see the terminal list the key reads.
 
 ## Break Timer
 

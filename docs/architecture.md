@@ -17,12 +17,11 @@
 src/plugin.ts                  # SDK registration and wake-up refresh
 src/actions/weekly-limit.ts    # Settings, lifecycle, ticker, source selection
 src/actions/system-metrics.ts  # Windows-only lifecycle, fifteen-second ticker, wake refresh
-src/actions/warp-tab-config.ts # Dynamic Tab Config selection and URI launch
+src/actions/hc-agent-status.ts # Visible-key polling and HC status rendering
 src/render.ts                  # Pure SVG key-face rendering and time formatting
 src/metrics/windows.ts         # Local PowerShell/Get-Counter and nvidia-smi reader
 src/metrics/types.ts           # Supported local system metric names
-src/warp/                       # Local Warp Tab Config discovery and URI normalization
-src/warp/uris.ts                # Validated custom-URI opening across platforms
+src/hc/status.ts               # Local HC terminal-list reader and count validation
 src/usage/types.ts             # Reading/sample contracts and no-data error
 src/usage/burn-rate.ts         # Reset-aware burn-rate projection
 src/usage/claude.ts            # Claude snapshot/history file reader
@@ -33,7 +32,6 @@ com.kadragon.aiusage.sdPlugin/
   manifest.json                # Stream Deck package contract
   ui/weekly-limit.html         # Property Inspector settings
   ui/system-monitor.html       # Local system metric selector
-  ui/warp-tab-config.html      # Warp Tab Config selector
   layouts/system-monitor.json  # Stream Deck+ dial feedback layout
   imgs/                        # Checked-in package artwork
   bin/                         # Generated build output; do not edit
@@ -55,8 +53,7 @@ plugin -> actions -> render
 
 - `WeeklyLimit` is the only action-level coordinator for settings, refresh cadence, and key updates.
 - `SystemMonitor` is the Windows-only action-level coordinator for metric refresh and key/encoder updates.
-- `WarpTabConfig` reads local Tab Config metadata for its Property Inspector and opens only validated
-  `warp://tab_config/` or `warppreview://tab_config/` URIs on key press.
+- `HcAgentStatus` shares one local HC read across visible keys and renders separate working and blocked counts.
 - Usage readers return `UsageReading`; invalid or missing local data becomes `NoUsageDataError`.
 - `renderKey` accepts a `KeyFace` and returns an SVG data URI; user-controlled caption text is escaped.
 - The Property Inspector sends settings through Stream Deck events; the ticker uses the latest event payload rather than polling IPC.
@@ -95,9 +92,9 @@ newer — its cache store imports `node:sqlite`, and an older runtime fails to l
 
 The shell wrapper creates the Claude files from status-line stdin and forwards the original payload to the configured status-line program.
 
-Warp Tab Config discovery also stays local. The action scans Warp's platform-specific `tab_configs`
-directory for `.toml` files, uses the filename stem as the launch identity, and reads only the optional
-top-level `name` for the Property Inspector label. It does not parse or execute config commands itself.
+HC agent status comes from the local Herdr Core CLI via `hc ls --json` with a bounded timeout.
+The reader counts live terminal root statuses only. Unavailable or invalid output is kept distinct
+from a valid list with zero matching statuses.
 
 The System Monitor data path is Windows-only. CPU utilization, RAM, disk usage, and network throughput
 come from local CIM classes (`Win32_PerfFormattedData_*`, `Win32_OperatingSystem`, `Win32_LogicalDisk`),

@@ -55,16 +55,16 @@ On Stream Deck+, the action uses its own dial layout: turn the dial to change th
 (two detents per step, wrapping in both directions, persisted to the action's settings), and push the
 dial or tap the touch strip to take a fresh reading immediately instead of waiting out the interval.
 
-### Warp Tab Config launcher
+### HC Agent Status
 
-Add the **Warp Tab Config** action, choose one saved config in its Property Inspector, and press the key
-to open that config as a new Warp tab. The selector reads local `.toml` files from Warp's `tab_configs`
-directory and uses the filename stem for the Warp URI. Use the selector's refresh button after adding or
-renaming a config. Every key press opens the selected config as a new tab in the active Warp window.
+Add **HC Agent Status** to a Stream Deck key. It shows live HC agents reporting
+`working` under **RUNNING** and `blocked` under **WAITING**. Idle, finished and unreported
+sessions are excluded. The key updates every five seconds while visible, on wake and when pressed.
+A failed read shows `--` in both columns. Existing Warp keys need to be replaced with this action.
 
-On Windows, the stable directory is `%APPDATA%\\warp\\Warp\\data\\tab_configs\\`; macOS uses
-`~/.warp/tab_configs/`; Linux uses `${XDG_DATA_HOME:-$HOME/.local/share}/warp-terminal/tab_configs/`.
-Preview configs are listed when present and use Warp's `warppreview://` URI scheme.
+Install Herdr Core and make `hc` available on the Stream Deck process's PATH. On Windows, the
+standard per-user location (`%LOCALAPPDATA%/Programs/herdr-core/hc.exe`) also works.
+Run `hc ls --json` to verify the local CLI and see the terminal list the key reads.
 
 ### Verify
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- [done] Replace Warp launcher with HC Agent Status key (ai-usage-streamdeck v0.11.0) (2026-11-18)
 - [done] Add Break Timer key that never interrupts work (ai-usage-streamdeck v0.10.0) (2026-10-29)
 - [done] Request the drive list only on disk-scoped System Monitor keys (ai-usage-streamdeck v0.9.1) (2026-08-10) → docs/design/system-monitor-ux.md
 - [done] Scope System Monitor inspector controls and make refresh configurable (ai-usage-streamdeck v0.9.0) (2026-08-10) → docs/design/system-monitor-ux.md

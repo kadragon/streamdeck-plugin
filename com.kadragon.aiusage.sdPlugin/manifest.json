@@ -1,6 +1,6 @@
 {
 	"Name": "Dev Toolkit",
-	"Version": "0.10.0.0",
+	"Version": "0.11.0.0",
 	"Author": "kadragon",
 	"Actions": [
 		{
@@ -46,17 +46,16 @@
 			]
 		},
 		{
-			"Name": "Warp Tab Config",
-			"UUID": "com.kadragon.aiusage.warp-tab-config",
-			"Icon": "imgs/actions/warp-tab-config/icon",
-			"Tooltip": "Opens a selected Warp Tab Config.",
-			"PropertyInspectorPath": "ui/warp-tab-config.html",
+			"Name": "HC Agent Status",
+			"UUID": "com.kadragon.aiusage.hc-agent-status",
+			"Icon": "imgs/actions/usage/icon",
+			"Tooltip": "Shows running and input-waiting HC agents. Press to refresh.",
 			"Controllers": [
 				"Keypad"
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/warp-tab-config/key",
+					"Image": "imgs/actions/usage/key",
 					"TitleAlignment": "middle"
 				}
 			]
@@ -81,7 +80,7 @@
 	"Category": "Dev Toolkit",
 	"CategoryIcon": "imgs/plugin/category-icon",
 	"CodePath": "bin/plugin.js",
-	"Description": "Shows AI weekly usage, local Windows system metrics, validated Warp Tab Config launchers, and a break timer.",
+	"Description": "Shows AI weekly usage, local Windows system metrics, HC agent status, and a break timer.",
 	"Icon": "imgs/plugin/marketplace",
 	"SDKVersion": 3,
 	"Software": {
