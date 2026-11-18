@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { WillAppearEvent } from "@elgato/streamdeck";
+import { streamDeck, type WillAppearEvent } from "@elgato/streamdeck";
 
 import { HcAgentStatus } from "../src/actions/hc-agent-status";
 import { parseHcAgentCounts } from "../src/hc/status";
@@ -38,7 +38,8 @@ test("renders empty and unavailable counts distinctly", () => {
 	assert.match(active, />2<\/text>[\s\S]*>1<\/text>[\s\S]*>RUNNING<\/text>[\s\S]*>WAITING<\/text>/);
 });
 
-test("refreshes when the SDK rejects clearing the key title", async () => {
+test("refreshes when the SDK rejects clearing the key title", async (context) => {
+	const log = context.mock.method(streamDeck.logger, "error", () => {});
 	const action = new HcAgentStatus();
 	let refreshed = false;
 	action.refreshAll = async () => {
@@ -54,4 +55,5 @@ test("refreshes when the SDK rejects clearing the key title", async () => {
 	} as unknown as WillAppearEvent;
 	await action.onWillAppear(event);
 	assert.equal(refreshed, true);
+	assert.equal(log.mock.callCount(), 1);
 });
