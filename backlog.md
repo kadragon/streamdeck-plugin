@@ -24,3 +24,9 @@ Spec: `docs/design/system-monitor-ux.md`. Ordered; A1 precedes B1.
 
 - [ ] [feat] Investigate a live usage endpoint for the Claude source, as done for Codex via `wham/usage` — Claude Code persists no percentages of its own, so this needs a spike to find whether an equivalent endpoint and local credential exist — `src/usage/claude.ts`
 - [ ] [feat] Multi-metric key (2–3 readings on one 144×144 face) — rejected in the current spec on glanceability grounds; revisit only with hardware evidence
+
+## Review Backlog
+
+### PR #30 — Cycle through HC agent sessions from Stream Deck (2026-11-18)
+
+- [ ] [debt] Same-mode key presses while a focus is pending are collapsed, so a quick double press cannot skip to the next session; decide whether to queue them (source: code-review) — src/actions/hc-agent-status.ts:66

@@ -38,21 +38,21 @@ export async function readClaudeUsage(
 	herdrSnapshotPath = dir === DEFAULT_CLAUDE_DIR ? HERDR_SNAPSHOT : undefined
 ): Promise<UsageReading> {
 	const herdr = herdrSnapshotPath === undefined ? undefined : await readHerdrSnapshot(herdrSnapshotPath);
+	let latest: Omit<UsageReading, "history">;
 	try {
 		const wrapper = await readWrapperSnapshot(path.join(dir, SNAPSHOT_FILE));
-		if (herdr !== undefined && herdr.observedAt > wrapper.observedAt) {
-			return herdr;
-		}
-		return { ...wrapper, history: await readHistory(path.join(dir, HISTORY_FILE)) };
+		latest = herdr !== undefined && herdr.observedAt > wrapper.observedAt ? herdr : wrapper;
 	} catch (error) {
-		if (herdr !== undefined && error instanceof NoUsageDataError) {
-			return herdr;
+		if (herdr === undefined || !(error instanceof NoUsageDataError)) {
+			throw error;
 		}
-		throw error;
+		latest = herdr;
 	}
+	// The wrapper history still drives the burn-rate estimate when Herdr holds the newer reading.
+	return { ...latest, history: await readHistory(path.join(dir, HISTORY_FILE)) };
 }
 
-async function readHerdrSnapshot(snapshotPath: string): Promise<UsageReading | undefined> {
+async function readHerdrSnapshot(snapshotPath: string): Promise<Omit<UsageReading, "history"> | undefined> {
 	let snapshot: { used?: unknown; reset?: unknown; observed?: unknown } | null;
 	try {
 		snapshot = JSON.parse(await fs.readFile(snapshotPath, "utf8"));
@@ -67,7 +67,7 @@ async function readHerdrSnapshot(snapshotPath: string): Promise<UsageReading | u
 		return undefined;
 	}
 
-	return { usedPercent: snapshot.used, observedAt, resetsAt, history: [] };
+	return { usedPercent: snapshot.used, observedAt, resetsAt };
 }
 
 async function readWrapperSnapshot(snapshotPath: string): Promise<Omit<UsageReading, "history">> {

@@ -107,6 +107,8 @@ export class HcAgentStatus extends SingletonAction<HcSettings> {
 	}
 
 	async #focusNextAgent(mode: HcDisplayMode): Promise<void> {
+		// A tick already in flight read `hc ls` before this press; wait for it, then read again.
+		await this.#refreshing?.catch(() => undefined);
 		await this.refreshAll();
 		const addresses = this.#reading?.[mode].filter((address) => address !== undefined) ?? [];
 		const previous = addresses.findIndex((address) => address === this.#lastFocused[mode]);
