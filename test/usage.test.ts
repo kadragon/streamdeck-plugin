@@ -7,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { currentWindowSamples, projectExhaustion } from "../src/usage/burn-rate";
-import { readClaudeUsage } from "../src/usage/claude";
+import { herdrSnapshotPath, readClaudeUsage } from "../src/usage/claude";
 import { readCodexUsage } from "../src/usage/codex";
 import { defaultFetch, resetCodexUsageCache, type CodexApiFailure } from "../src/usage/codex-api";
 import { NoUsageDataError, type UsageReading } from "../src/usage/types";
@@ -82,6 +82,14 @@ test("Claude reader uses the newest valid weekly snapshot from Herdr or the wrap
 	} finally {
 		await fs.rm(directory, { recursive: true, force: true });
 	}
+});
+
+test("Herdr snapshot path honours HERDR_APP_HOME before the default app home", () => {
+	const custom = path.join(os.tmpdir(), "herdr-home");
+	assert.equal(herdrSnapshotPath({ HERDR_APP_HOME: custom }), path.join(custom, "data", "account-usage-claude.json"));
+	const fallback = path.join(os.homedir(), ".config", "herdr-app", "data", "account-usage-claude.json");
+	assert.equal(herdrSnapshotPath({ HERDR_APP_HOME: "" }), fallback);
+	assert.equal(herdrSnapshotPath({}), fallback);
 });
 
 test("Codex reader drops invalid observations and preserves valid reset time", async () => {

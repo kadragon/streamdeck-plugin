@@ -60,7 +60,8 @@ dial or tap the touch strip to take a fresh reading immediately instead of waiti
 Add **HC Agent Status** twice to show both counts. In each key's Property Inspector, set **Show**
 to **Running** or **Waiting**. Existing keys default to Running. Running counts live HC sessions
 reporting `working`; Waiting counts live `blocked`, `idle`, and `done` sessions. Press either key to
-focus a matching session in the running Herdr app. Repeated presses cycle through that key's sessions.
+focus a matching session in the running Herdr app. Repeated presses cycle through that key's sessions;
+quick presses queue, each advancing one session.
 The keys refresh every five seconds while visible,
 on wake and when pressed. A failed read displays `--`.
 

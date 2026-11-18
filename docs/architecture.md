@@ -55,6 +55,7 @@ plugin -> actions -> render
 - `SystemMonitor` is the Windows-only action-level coordinator for metric refresh and key/encoder updates.
 - `HcAgentStatus` shares one local HC read across visible keys and renders the configured count per key.
   Each display mode cycles focus independently through its matching live sessions in Herdr.
+  Presses queue in order; a press still queued after the last key disappears focuses nothing.
 - Usage readers return `UsageReading`; invalid or missing local data becomes `NoUsageDataError`.
 - `renderKey` accepts a `KeyFace` and returns an SVG data URI; user-controlled caption text is escaped.
 - The Property Inspector sends settings through Stream Deck events; the ticker uses the latest event payload rather than polling IPC.
@@ -67,7 +68,7 @@ plugin -> actions -> render
 ## Data Access
 
 Claude uses the newest valid status-line observation from `~/.claude/ai-usage/claude.json` or Herdr's
-`~/.config/herdr-app/data/account-usage-claude.json`. Only the wrapper snapshot uses its adjacent
+`data/account-usage-claude.json` under `HERDR_APP_HOME` (default `~/.config/herdr-app`). Only the wrapper snapshot uses its adjacent
 `claude-history.jsonl` for burn-rate estimates. Codex data comes from
 `~/.codex/sessions/**/rollout-*.jsonl` plus one usage-only endpoint — `GET
 https://chatgpt.com/backend-api/wham/usage`, the same request the Codex CLI polls — authorised with the

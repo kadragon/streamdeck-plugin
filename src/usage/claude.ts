@@ -19,7 +19,11 @@ import {
  */
 export const DEFAULT_CLAUDE_DIR = path.join(os.homedir(), ".claude", "ai-usage");
 
-const HERDR_SNAPSHOT = path.join(os.homedir(), ".config", "herdr-app", "data", "account-usage-claude.json");
+/** Herdr's own status-line capture; the app home honours `HERDR_APP_HOME` before its default. */
+export function herdrSnapshotPath(env: NodeJS.ProcessEnv = process.env): string {
+	const home = env.HERDR_APP_HOME || path.join(os.homedir(), ".config", "herdr-app");
+	return path.join(home, "data", "account-usage-claude.json");
+}
 
 /** Latest observation. */
 const SNAPSHOT_FILE = "claude.json";
@@ -37,9 +41,9 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
  */
 export async function readClaudeUsage(
 	dir = DEFAULT_CLAUDE_DIR,
-	herdrSnapshotPath = dir === DEFAULT_CLAUDE_DIR ? HERDR_SNAPSHOT : undefined
+	herdrSnapshot = dir === DEFAULT_CLAUDE_DIR ? herdrSnapshotPath() : undefined
 ): Promise<UsageReading> {
-	const herdr = herdrSnapshotPath === undefined ? undefined : await readHerdrSnapshot(herdrSnapshotPath);
+	const herdr = herdrSnapshot === undefined ? undefined : await readHerdrSnapshot(herdrSnapshot);
 	let latest: Omit<UsageReading, "history">;
 	try {
 		const wrapper = await readWrapperSnapshot(path.join(dir, SNAPSHOT_FILE));

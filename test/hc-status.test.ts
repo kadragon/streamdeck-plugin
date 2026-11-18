@@ -95,9 +95,37 @@ test("Running and Waiting keys cycle through their own live terminals independen
 	await press(running);
 	await press(running);
 	await press(waiting);
-	assert.deepEqual(focused, ["t3", "t4", "t9", "t5", "t4", "t3"]);
+	assert.deepEqual(focused, ["t3", "t9", "t4", "t3", "t5", "t4", "t9"]);
 	terminals = [terminal("blocked"), terminal("working")];
 	await press(waiting);
 	await press(running);
-	assert.equal(focused.length, 6);
+	assert.equal(focused.length, 7);
+});
+
+test("a press still queued after every HC key disappears focuses nothing", async () => {
+	const terminals = [{ state: "live", status: "blocked", address: "t3" }];
+	const focused: string[] = [];
+	let releaseFirstFocus = () => {};
+	const action = new HcAgentStatus(
+		async () => parseHcAgentStatus(JSON.stringify({ terminals })),
+		async (address) => {
+			focused.push(address);
+			if (focused.length === 1) {
+				await new Promise<void>((resolve) => { releaseFirstFocus = resolve; });
+			}
+		}
+	);
+	const key = { id: "waiting", isKey: () => true, setImage: async () => {} };
+	const actions: unknown[] = [key];
+	Object.defineProperty(action, "actions", { get: () => actions });
+	await action.onDidReceiveSettings({ action: key, payload: { settings: { mode: "waiting" } } } as unknown as DidReceiveSettingsEvent);
+	const first = action.onKeyDown({ action: key } as unknown as KeyDownEvent);
+	const queued = action.onKeyDown({ action: key } as unknown as KeyDownEvent);
+	while (focused.length === 0) {
+		await new Promise((resolve) => setImmediate(resolve));
+	}
+	actions.length = 0;
+	releaseFirstFocus();
+	await Promise.all([first, queued]);
+	assert.deepEqual(focused, ["t3"]);
 });
