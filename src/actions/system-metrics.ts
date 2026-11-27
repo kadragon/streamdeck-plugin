@@ -88,6 +88,10 @@ export class SystemMonitor extends SingletonAction<SystemMonitorSettings> {
 	override async onWillAppear(ev: WillAppearEvent<SystemMonitorSettings>): Promise<void> {
 		const revision = this.#setSettings(ev.action.id, ev.payload.settings);
 		this.#syncTicker();
+		// Only keys and dials are registered for this action; the guard narrows away other SDK action types.
+		if (!ev.action.isKey() && !ev.action.isDial()) {
+			return;
+		}
 		await this.#refresh(ev.action, ev.payload.settings, revision);
 	}
 
@@ -107,6 +111,10 @@ export class SystemMonitor extends SingletonAction<SystemMonitorSettings> {
 	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<SystemMonitorSettings>): Promise<void> {
 		const revision = this.#setSettings(ev.action.id, ev.payload.settings);
 		this.#syncTicker();
+		// Only keys and dials are registered for this action; the guard narrows away other SDK action types.
+		if (!ev.action.isKey() && !ev.action.isDial()) {
+			return;
+		}
 		await this.#refresh(ev.action, ev.payload.settings, revision);
 	}
 

@@ -24,7 +24,7 @@
         "rollup": "^4.68.3",
         "tslib": "^2.9.1",
         "tsx": "^4.23.15",
-        "typescript": "^7.0.2"
+        "typescript": "^5.2.2"
     },
     "dependencies": {
         "@elgato/streamdeck": "^3.0.4",
